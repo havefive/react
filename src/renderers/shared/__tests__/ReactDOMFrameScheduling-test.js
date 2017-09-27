@@ -1,10 +1,8 @@
 /**
- * Copyright 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) 2016-present, Facebook, Inc.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @emails react-core
  */
@@ -15,16 +13,16 @@ const ReactDOMFeatureFlags = require('ReactDOMFeatureFlags');
 const describeFiber = ReactDOMFeatureFlags.useFiber ? describe : xdescribe;
 
 describeFiber('ReactDOMFrameScheduling', () => {
-  it('throws when requestAnimationFrame is not polyfilled in the browser', () => {
+  it('warns when requestAnimationFrame is not polyfilled in the browser', () => {
     const previousRAF = global.requestAnimationFrame;
     try {
       global.requestAnimationFrame = undefined;
       jest.resetModules();
-      expect(() => {
-        require('ReactDOM');
-      }).toThrow(
-        'React depends on requestAnimationFrame. Make sure that you load a ' +
-          'polyfill in older browsers.',
+      spyOn(console, 'error');
+      require('react-dom');
+      expect(console.error.calls.count()).toBe(1);
+      expect(console.error.calls.argsFor(0)[0]).toContain(
+        'React depends on requestAnimationFrame.',
       );
     } finally {
       global.requestAnimationFrame = previousRAF;
@@ -44,7 +42,7 @@ describeFiber('ReactDOMFrameScheduling', () => {
       delete global.window;
       jest.resetModules();
       expect(() => {
-        require('ReactDOM');
+        require('react-dom');
       }).not.toThrow();
     } finally {
       global.requestAnimationFrame = previousRAF;

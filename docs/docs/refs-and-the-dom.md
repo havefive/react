@@ -39,10 +39,10 @@ When the `ref` attribute is used on an HTML element, the `ref` callback receives
 class CustomTextInput extends React.Component {
   constructor(props) {
     super(props);
-    this.focus = this.focus.bind(this);
+    this.focusTextInput = this.focusTextInput.bind(this);
   }
 
-  focus() {
+  focusTextInput() {
     // Explicitly focus the text input using the raw DOM API
     this.textInput.focus();
   }
@@ -58,7 +58,7 @@ class CustomTextInput extends React.Component {
         <input
           type="button"
           value="Focus the text input"
-          onClick={this.focus}
+          onClick={this.focusTextInput}
         />
       </div>
     );
@@ -77,7 +77,7 @@ When the `ref` attribute is used on a custom component declared as a class, the 
 ```javascript{3,9}
 class AutoFocusTextInput extends React.Component {
   componentDidMount() {
-    this.textInput.focus();
+    this.textInput.focusTextInput();
   }
 
   render() {
@@ -149,7 +149,7 @@ function CustomTextInput(props) {
 
 In rare cases, you might want to have access to a child's DOM node from a parent component. This is generally not recommended because it breaks component encapsulation, but it can occasionally be useful for triggering focus or measuring the size or position of a child DOM node.
 
-While you could [add a ref to to the child component](#adding-a-ref-to-a-class-component), this is not an ideal solution, as you would only get a component instance rather than a DOM node. Additionally, this wouldn't work with functional components.
+While you could [add a ref to the child component](#adding-a-ref-to-a-class-component), this is not an ideal solution, as you would only get a component instance rather than a DOM node. Additionally, this wouldn't work with functional components.
 
 Instead, in such cases we recommend exposing a special prop on the child. The child would take a function prop with an arbitrary name (e.g. `inputRef`) and attach it to the DOM node as a `ref` attribute. This lets the parent pass its ref callback to the child's DOM node through the component in the middle.
 

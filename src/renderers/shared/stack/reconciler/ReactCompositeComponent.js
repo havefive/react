@@ -1,10 +1,8 @@
 /**
- * Copyright 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) 2013-present, Facebook, Inc.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @providesModule ReactCompositeComponent
  */
@@ -15,7 +13,6 @@ var React = require('react');
 var ReactComponentEnvironment = require('ReactComponentEnvironment');
 var ReactCompositeComponentTypes = require('ReactCompositeComponentTypes');
 var ReactErrorUtils = require('ReactErrorUtils');
-var ReactFeatureFlags = require('ReactFeatureFlags');
 var ReactInstanceMap = require('ReactInstanceMap');
 var ReactInstrumentation = require('ReactInstrumentation');
 var ReactNodeTypes = require('ReactNodeTypes');
@@ -24,6 +21,8 @@ var {ReactCurrentOwner} = require('ReactGlobalSharedState');
 
 if (__DEV__) {
   var {ReactDebugCurrentFrame} = require('ReactGlobalSharedState');
+  var ReactDebugCurrentStack = require('ReactDebugCurrentStack');
+  var warning = require('fbjs/lib/warning');
   var warningAboutMissingGetChildContext = {};
 }
 
@@ -32,7 +31,6 @@ var emptyObject = require('fbjs/lib/emptyObject');
 var invariant = require('fbjs/lib/invariant');
 var shallowEqual = require('fbjs/lib/shallowEqual');
 var shouldUpdateReactComponent = require('shouldUpdateReactComponent');
-var warning = require('fbjs/lib/warning');
 
 function StatelessComponent(Component) {}
 StatelessComponent.prototype.render = function() {
@@ -352,7 +350,7 @@ var ReactCompositeComponent = {
     }
 
     var markup;
-    if (inst.unstable_handleError) {
+    if (inst.componentDidCatch) {
       markup = this.performInitialMountWithErrorHandling(
         renderedElement,
         hostParent,
@@ -402,8 +400,10 @@ var ReactCompositeComponent = {
     publicContext,
     updateQueue,
   ) {
-    if (__DEV__) {
+    if (__DEV__ && !doConstruct) {
       ReactCurrentOwner.current = this;
+      ReactDebugCurrentFrame.getCurrentStack =
+        ReactDebugCurrentStack.getStackAddendum;
       try {
         return this._constructComponentWithoutOwner(
           doConstruct,
@@ -413,6 +413,7 @@ var ReactCompositeComponent = {
         );
       } finally {
         ReactCurrentOwner.current = null;
+        ReactDebugCurrentFrame.getCurrentStack = null;
       }
     } else {
       return this._constructComponentWithoutOwner(
@@ -477,7 +478,7 @@ var ReactCompositeComponent = {
     } catch (e) {
       // Roll back to checkpoint, handle error (which may add items to the transaction), and take a new checkpoint
       transaction.rollback(checkpoint);
-      this._instance.unstable_handleError(e);
+      this._instance.componentDidCatch(e);
       if (this._pendingStateQueue) {
         this._instance.state = this._processPendingState(
           this._instance.props,
@@ -747,15 +748,15 @@ var ReactCompositeComponent = {
    */
   _checkContextTypes: function(typeSpecs, values, location: string) {
     if (__DEV__) {
-      ReactDebugCurrentFrame.current = this._debugID;
+      ReactDebugCurrentStack.current = this._debugID;
       checkPropTypes(
         typeSpecs,
         values,
         location,
         this.getName(),
-        ReactDebugCurrentFrame.getStackAddendum,
+        ReactDebugCurrentStack.getStackAddendum,
       );
-      ReactDebugCurrentFrame.current = null;
+      ReactDebugCurrentStack.current = null;
     }
   },
 
@@ -1046,7 +1047,7 @@ var ReactCompositeComponent = {
     inst.state = nextState;
     inst.context = nextContext;
 
-    if (inst.unstable_handleError) {
+    if (inst.componentDidCatch) {
       this._updateRenderedComponentWithErrorHandling(
         transaction,
         unmaskedContext,
@@ -1089,7 +1090,7 @@ var ReactCompositeComponent = {
       // Roll back to checkpoint, handle error (which may add items to the transaction),
       // and take a new checkpoint
       transaction.rollback(checkpoint);
-      this._instance.unstable_handleError(e);
+      this._instance.componentDidCatch(e);
       if (this._pendingStateQueue) {
         this._instance.state = this._processPendingState(
           this._instance.props,
@@ -1157,15 +1158,6 @@ var ReactCompositeComponent = {
       );
     } else {
       var oldHostNode = ReactReconciler.getHostNode(prevComponentInstance);
-
-      if (!ReactFeatureFlags.prepareNewChildrenBeforeUnmountInStack) {
-        ReactReconciler.unmountComponent(
-          prevComponentInstance,
-          safely,
-          false /* skipLifecycle */,
-        );
-      }
-
       var nodeType = ReactNodeTypes.getType(nextRenderedElement);
       this._renderedNodeType = nodeType;
       var child = this._instantiateReactComponent(
@@ -1183,13 +1175,11 @@ var ReactCompositeComponent = {
         debugID,
       );
 
-      if (ReactFeatureFlags.prepareNewChildrenBeforeUnmountInStack) {
-        ReactReconciler.unmountComponent(
-          prevComponentInstance,
-          safely,
-          false /* skipLifecycle */,
-        );
-      }
+      ReactReconciler.unmountComponent(
+        prevComponentInstance,
+        safely,
+        false /* skipLifecycle */,
+      );
 
       if (__DEV__) {
         if (debugID !== 0) {
@@ -1258,10 +1248,17 @@ var ReactCompositeComponent = {
       this._compositeType !== ReactCompositeComponentTypes.StatelessFunctional
     ) {
       ReactCurrentOwner.current = this;
+      if (__DEV__) {
+        ReactDebugCurrentFrame.getCurrentStack =
+          ReactDebugCurrentStack.getStackAddendum;
+      }
       try {
         renderedElement = this._renderValidatedComponentWithoutOwnerOrContext();
       } finally {
         ReactCurrentOwner.current = null;
+        if (__DEV__) {
+          ReactDebugCurrentFrame.getCurrentStack = null;
+        }
       }
     } else {
       renderedElement = this._renderValidatedComponentWithoutOwnerOrContext();

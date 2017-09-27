@@ -1,10 +1,8 @@
 /**
- * Copyright 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) 2013-present, Facebook, Inc.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @providesModule CallbackQueue
  * @flow
@@ -31,12 +29,10 @@ var validateCallback = require('validateCallback');
 class CallbackQueue<T> {
   _callbacks: ?Array<() => void>;
   _contexts: ?Array<T>;
-  _arg: ?mixed;
 
-  constructor(arg) {
+  constructor() {
     this._callbacks = null;
     this._contexts = null;
-    this._arg = arg;
   }
 
   /**
@@ -62,7 +58,6 @@ class CallbackQueue<T> {
   notifyAll() {
     var callbacks = this._callbacks;
     var contexts = this._contexts;
-    var arg = this._arg;
     if (callbacks && contexts) {
       invariant(
         callbacks.length === contexts.length,
@@ -72,7 +67,7 @@ class CallbackQueue<T> {
       this._contexts = null;
       for (var i = 0; i < callbacks.length; i++) {
         validateCallback(callbacks[i]);
-        callbacks[i].call(contexts[i], arg);
+        callbacks[i].call(contexts[i]);
       }
       callbacks.length = 0;
       contexts.length = 0;

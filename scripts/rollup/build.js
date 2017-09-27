@@ -18,8 +18,11 @@ const Bundles = require('./bundles');
 const propertyMangleWhitelist = require('./mangle').propertyMangleWhitelist;
 const sizes = require('./plugins/sizes-plugin');
 const Stats = require('./stats');
+const syncReactDom = require('./sync').syncReactDom;
+const syncReactNative = require('./sync').syncReactNative;
 const Packaging = require('./packaging');
 const Header = require('./header');
+const closure = require('rollup-plugin-closure-compiler-js');
 
 const UMD_DEV = Bundles.bundleTypes.UMD_DEV;
 const UMD_PROD = Bundles.bundleTypes.UMD_PROD;
@@ -37,6 +40,8 @@ const requestedBundleTypes = (argv.type || '')
 const requestedBundleNames = (argv._[0] || '')
   .split(',')
   .map(type => type.toLowerCase());
+const syncFbsource = argv['sync-fbsource'];
+const syncWww = argv['sync-www'];
 
 // used for when we property mangle with uglify/gcc
 const mangleRegex = new RegExp(
@@ -46,7 +51,7 @@ const mangleRegex = new RegExp(
   'g'
 );
 
-function getBanner(bundleType, hasteName, filename) {
+function getHeaderSanityCheck(bundleType, hasteName) {
   switch (bundleType) {
     case FB_DEV:
     case FB_PROD:
@@ -55,52 +60,100 @@ function getBanner(bundleType, hasteName, filename) {
       let hasteFinalName = hasteName;
       switch (bundleType) {
         case FB_DEV:
+        case RN_DEV:
           hasteFinalName += '-dev';
           break;
         case FB_PROD:
+        case RN_PROD:
           hasteFinalName += '-prod';
           break;
       }
-      const fbDevCode = `\n\n'use strict';\n\n` + `\nif (__DEV__) {\n`;
-      return Header.getProvidesHeader(hasteFinalName, bundleType, fbDevCode);
+      return hasteFinalName;
     case UMD_DEV:
     case UMD_PROD:
-      return Header.getUMDHeader(filename, reactVersion);
+      return reactVersion;
+    default:
+      return null;
+  }
+}
+
+function getBanner(bundleType, hasteName, filename) {
+  switch (bundleType) {
+    // UMDs are not wrapped in conditions.
+    case UMD_DEV:
+    case UMD_PROD:
+      return Header.getHeader(filename, reactVersion);
+    // CommonJS DEV bundle is guarded to help weak dead code elimination.
+    case NODE_DEV:
+      let banner = Header.getHeader(filename, reactVersion);
+      // Wrap the contents of the if-DEV check with an IIFE.
+      // Block-level function definitions can cause problems for strict mode.
+      banner += `'use strict';\n\n\nif (process.env.NODE_ENV !== "production") {\n(function() {\n`;
+      return banner;
+    case NODE_PROD:
+      return Header.getHeader(filename, reactVersion);
+    // All FB and RN bundles need Haste headers.
+    // DEV bundle is guarded to help weak dead code elimination.
+    case FB_DEV:
+    case FB_PROD:
+    case RN_DEV:
+    case RN_PROD:
+      const isDev = bundleType === FB_DEV || bundleType === RN_DEV;
+      const hasteFinalName = hasteName + (isDev ? '-dev' : '-prod');
+      // Wrap the contents of the if-DEV check with an IIFE.
+      // Block-level function definitions can cause problems for strict mode.
+      return (
+        Header.getProvidesHeader(hasteFinalName) +
+        (isDev ? `\n\n'use strict';\n\n\nif (__DEV__) {\n(function() {\n` : '')
+      );
+    default:
+      throw new Error('Unknown type.');
+  }
+}
+
+function getFooter(bundleType) {
+  // Only need a footer if getBanner() has an opening brace.
+  switch (bundleType) {
+    // Non-UMD DEV bundles need conditions to help weak dead code elimination.
+    case NODE_DEV:
+    case FB_DEV:
+    case RN_DEV:
+      return '\n})();\n}\n';
     default:
       return '';
   }
 }
 
-function getFooter(bundleType) {
-  if (bundleType === FB_DEV) {
-    return '\n}\n';
-  }
-  return '';
-}
-
 function updateBabelConfig(babelOpts, bundleType) {
-  let newOpts;
-
   switch (bundleType) {
+    case FB_DEV:
+    case FB_PROD:
+    case RN_DEV:
+    case RN_PROD:
+      return Object.assign({}, babelOpts, {
+        plugins: babelOpts.plugins.concat([
+          // Wrap warning() calls in a __DEV__ check so they are stripped from production.
+          require('./plugins/wrap-warning-with-env-check'),
+        ]),
+      });
     case UMD_DEV:
     case UMD_PROD:
     case NODE_DEV:
     case NODE_PROD:
-    case RN_DEV:
-    case RN_PROD:
-      newOpts = Object.assign({}, babelOpts);
-      // we add the objectAssign transform for these bundles
-      newOpts.plugins = newOpts.plugins.slice();
-      newOpts.plugins.push(
-        resolve('./scripts/babel/transform-object-assign-require')
-      );
-      return newOpts;
-    case FB_DEV:
-    case FB_PROD:
-      newOpts = Object.assign({}, babelOpts);
-      // for FB, we don't want the devExpressionWithCodes plugin to run
-      newOpts.plugins = [];
-      return newOpts;
+      return Object.assign({}, babelOpts, {
+        plugins: babelOpts.plugins.concat([
+          // Use object-assign polyfill in open source
+          resolve('./scripts/babel/transform-object-assign-require'),
+
+          // Minify invariant messages
+          require('../error-codes/replace-invariant-error-codes'),
+
+          // Wrap warning() calls in a __DEV__ check so they are stripped from production.
+          require('./plugins/wrap-warning-with-env-check'),
+        ]),
+      });
+    default:
+      return babelOpts;
   }
 }
 
@@ -165,7 +218,12 @@ function getFilename(name, hasteName, bundleType) {
   }
 }
 
-function uglifyConfig(mangle, manglePropertiesOnProd, preserveVersionHeader) {
+function uglifyConfig(configs) {
+  var mangle = configs.mangle;
+  var manglePropertiesOnProd = configs.manglePropertiesOnProd;
+  var preserveVersionHeader = configs.preserveVersionHeader;
+  var removeComments = configs.removeComments;
+  var headerSanityCheck = configs.headerSanityCheck;
   return {
     warnings: false,
     compress: {
@@ -186,7 +244,10 @@ function uglifyConfig(mangle, manglePropertiesOnProd, preserveVersionHeader) {
       comments(node, comment) {
         if (preserveVersionHeader && comment.pos === 0 && comment.col === 0) {
           // Keep the very first comment (the bundle header) in prod bundles.
-          if (comment.value.indexOf(reactVersion) === -1) {
+          if (
+            headerSanityCheck &&
+            comment.value.indexOf(headerSanityCheck) === -1
+          ) {
             // Sanity check: this doesn't look like the bundle header!
             throw new Error(
               'Expected the first comment to be the file header but got: ' +
@@ -195,8 +256,7 @@ function uglifyConfig(mangle, manglePropertiesOnProd, preserveVersionHeader) {
           }
           return true;
         }
-        // Keep all comments in FB bundles.
-        return !mangle;
+        return !removeComments;
       },
     },
     mangleProperties: mangle && manglePropertiesOnProd
@@ -242,28 +302,36 @@ function getPlugins(
   paths,
   filename,
   bundleType,
+  hasteName,
   isRenderer,
-  manglePropertiesOnProd
+  manglePropertiesOnProd,
+  useFiber,
+  modulesToStub
 ) {
   const plugins = [
     babel(updateBabelConfig(babelOpts, bundleType)),
     alias(
-      Modules.getAliases(paths, bundleType, isRenderer, argv.extractErrors)
+      Modules.getAliases(paths, bundleType, isRenderer, argv['extract-errors'])
     ),
   ];
 
-  const replaceModules = Modules.getDefaultReplaceModules(bundleType);
+  const replaceModules = Modules.getDefaultReplaceModules(
+    bundleType,
+    modulesToStub
+  );
+
   // We have to do this check because Rollup breaks on empty object.
   // TODO: file an issue with rollup-plugin-replace.
   if (Object.keys(replaceModules).length > 0) {
     plugins.unshift(replace(replaceModules));
   }
 
+  const headerSanityCheck = getHeaderSanityCheck(bundleType, hasteName);
+
   switch (bundleType) {
     case UMD_DEV:
     case NODE_DEV:
     case FB_DEV:
-    case RN_DEV:
       plugins.push(
         replace(stripEnvVariables(false)),
         // needs to happen after strip env
@@ -272,18 +340,55 @@ function getPlugins(
       break;
     case UMD_PROD:
     case NODE_PROD:
+      plugins.push(
+        replace(stripEnvVariables(true)),
+        // needs to happen after strip env
+        commonjs(getCommonJsConfig(bundleType)),
+        closure({
+          compilationLevel: 'SIMPLE',
+          languageIn: 'ECMASCRIPT5_STRICT',
+          languageOut: 'ECMASCRIPT5_STRICT',
+          env: 'CUSTOM',
+          warningLevel: 'QUIET',
+          assumeFunctionWrapper: true,
+          applyInputSourceMaps: false,
+          useTypesForOptimization: false,
+          processCommonJsModules: false,
+        })
+      );
+      break;
     case FB_PROD:
-    case RN_PROD:
       plugins.push(
         replace(stripEnvVariables(true)),
         // needs to happen after strip env
         commonjs(getCommonJsConfig(bundleType)),
         uglify(
-          uglifyConfig(
-            bundleType !== FB_PROD,
+          uglifyConfig({
+            mangle: bundleType !== FB_PROD,
             manglePropertiesOnProd,
-            bundleType === UMD_PROD
-          )
+            preserveVersionHeader: bundleType === UMD_PROD,
+            // leave comments in for source map debugging purposes
+            // they will be stripped as part of FB's build process
+            removeComments: bundleType !== FB_PROD,
+            headerSanityCheck,
+          })
+        )
+      );
+      break;
+    case RN_DEV:
+    case RN_PROD:
+      plugins.push(
+        replace(stripEnvVariables(bundleType === RN_PROD)),
+        // needs to happen after strip env
+        commonjs(getCommonJsConfig(bundleType)),
+        uglify(
+          uglifyConfig({
+            mangle: false,
+            manglePropertiesOnProd,
+            preserveVersionHeader: true,
+            removeComments: true,
+            headerSanityCheck,
+          })
         )
       );
       break;
@@ -332,7 +437,7 @@ function createBundle(bundle, bundleType) {
   const format = getFormat(bundleType);
   const packageName = Packaging.getPackageName(bundle.name);
 
-  console.log(`${chalk.bgYellow.black(' STARTING ')} ${logKey}`);
+  console.log(`${chalk.bgYellow.black(' BUILDING ')} ${logKey}`);
   return rollup({
     entry: bundleType === FB_DEV || bundleType === FB_PROD
       ? bundle.fbEntry
@@ -349,8 +454,11 @@ function createBundle(bundle, bundleType) {
       bundle.paths,
       filename,
       bundleType,
+      bundle.hasteName,
       bundle.isRenderer,
-      bundle.manglePropertiesOnProd
+      bundle.manglePropertiesOnProd,
+      bundle.useFiber,
+      bundle.modulesToStub
     ),
   })
     .then(result =>
@@ -406,6 +514,13 @@ rimraf('build', () => {
       () => createBundle(bundle, RN_PROD)
     );
   }
+  if (syncFbsource) {
+    tasks.push(() =>
+      syncReactNative(join('build', 'react-native'), syncFbsource)
+    );
+  } else if (syncWww) {
+    tasks.push(() => syncReactDom(join('build', 'facebook-www'), syncWww));
+  }
   // rather than run concurently, opt to run them serially
   // this helps improve console/warning/error output
   // and fixes a bunch of IO failures that sometimes occured
@@ -415,9 +530,9 @@ rimraf('build', () => {
       console.log(Stats.printResults());
       // save the results for next run
       Stats.saveResults();
-      if (argv.extractErrors) {
+      if (argv['extract-errors']) {
         console.warn(
-          '\nWarning: this build was created with --extractErrors enabled.\n' +
+          '\nWarning: this build was created with --extract-errors enabled.\n' +
             'this will result in extremely slow builds and should only be\n' +
             'used when the error map needs to be rebuilt.\n'
         );

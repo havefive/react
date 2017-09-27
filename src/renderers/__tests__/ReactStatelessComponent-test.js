@@ -1,10 +1,8 @@
 /**
- * Copyright 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) 2013-present, Facebook, Inc.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @emails react-core
  */
@@ -32,7 +30,7 @@ describe('ReactStatelessComponent', () => {
     PropTypes = require('prop-types');
     React = require('react');
     ReactDOM = require('react-dom');
-    ReactTestUtils = require('ReactTestUtils');
+    ReactTestUtils = require('react-dom/test-utils');
   });
 
   it('should render stateless component', () => {
@@ -157,15 +155,17 @@ describe('ReactStatelessComponent', () => {
     });
   }
 
-  it('should throw when stateless component returns undefined', () => {
-    function NotAComponent() {}
-    expect(function() {
-      ReactTestUtils.renderIntoDocument(<div><NotAComponent /></div>);
-    }).toThrowError(
-      'NotAComponent(...): A valid React element (or null) must be returned. ' +
-        'You may have returned undefined, an array or some other invalid object.',
-    );
-  });
+  if (ReactDOMFeatureFlags.useFiber) {
+    it('should throw when stateless component returns undefined', () => {
+      function NotAComponent() {}
+      expect(function() {
+        ReactTestUtils.renderIntoDocument(<div><NotAComponent /></div>);
+      }).toThrowError(
+        'NotAComponent(...): Nothing was returned from render. ' +
+          'This usually means a return statement is missing. Or, to render nothing, return null.',
+      );
+    });
+  }
 
   it('should throw on string refs in pure functions', () => {
     function Child() {

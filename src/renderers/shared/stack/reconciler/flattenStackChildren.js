@@ -1,10 +1,8 @@
 /**
- * Copyright 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) 2013-present, Facebook, Inc.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @providesModule flattenStackChildren
  * @flow
@@ -14,7 +12,10 @@
 
 var KeyEscapeUtils = require('KeyEscapeUtils');
 var traverseStackChildren = require('traverseStackChildren');
-var warning = require('fbjs/lib/warning');
+
+if (__DEV__) {
+  var warning = require('fbjs/lib/warning');
+}
 
 var ReactComponentTreeHook;
 
@@ -40,7 +41,7 @@ if (
  */
 function flattenSingleChildIntoContext(
   traverseContext: mixed,
-  child: ReactElement<any>,
+  child: React$Element<any>,
   name: string,
   selfDebugID?: number,
 ): void {
@@ -57,9 +58,12 @@ function flattenSingleChildIntoContext(
         warning(
           false,
           'flattenChildren(...): Encountered two children with the same key, ' +
-            '`%s`. Child keys must be unique; when two children share a key, only ' +
-            'the first child will be used.%s',
-          KeyEscapeUtils.unescape(name),
+            '`%s`. ' +
+            'Keys should be unique so that components maintain their identity ' +
+            'across updates. Non-unique keys may cause children to be ' +
+            'duplicated and/or omitted — the behavior is unsupported and ' +
+            'could change in a future version.%s',
+          KeyEscapeUtils.unescapeInDev(name),
           ReactComponentTreeHook.getStackAddendumByID(selfDebugID),
         );
       }
@@ -76,9 +80,9 @@ function flattenSingleChildIntoContext(
  * @return {!object} flattened children keyed by name.
  */
 function flattenStackChildren(
-  children: ReactElement<any>,
+  children: React$Element<any>,
   selfDebugID?: number,
-): ?{[name: string]: ReactElement<any>} {
+): ?{[name: string]: React$Element<any>} {
   if (children == null) {
     return children;
   }

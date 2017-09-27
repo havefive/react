@@ -56,7 +56,7 @@ class Calculator extends React.Component {
 }
 ```
 
-[Try it on CodePen.](http://codepen.io/valscion/pen/VpZJRZ?editors=0010)
+[Try it on CodePen.](https://codepen.io/gaearon/pen/ZXeOBm?editors=0010)
 
 ## Adding a Second Input
 
@@ -110,7 +110,7 @@ class Calculator extends React.Component {
 }
 ```
 
-[Try it on CodePen.](http://codepen.io/valscion/pen/GWKbao?editors=0010)
+[Try it on CodePen.](https://codepen.io/gaearon/pen/jGBryx?editors=0010)
 
 We have two inputs now, but when you enter the temperature in one of them, the other doesn't update. This contradicts our requirement: we want to keep them in sync.
 
@@ -196,7 +196,9 @@ Now, when the `TemperatureInput` wants to update its temperature, it calls `this
     this.props.onTemperatureChange(e.target.value);
 ```
 
-Note that there is no special meaning to either `temperature` or `onTemperatureChange` prop names in custom components. We could have called them anything else, like name them `value` and `onChange` which is a common convention.
+>Note:
+>
+>There is no special meaning to either `temperature` or `onTemperatureChange` prop names in custom components. We could have called them anything else, like name them `value` and `onChange` which is a common convention.
 
 The `onTemperatureChange` prop will be provided together with the `temperature` prop by the parent `Calculator` component. It will handle the change by modifying its own local state, thus re-rendering both inputs with the new values. We will look at the new `Calculator` implementation very soon.
 
@@ -294,7 +296,7 @@ class Calculator extends React.Component {
 }
 ```
 
-[Try it on CodePen.](http://codepen.io/valscion/pen/jBNjja?editors=0010)
+[Try it on CodePen.](https://codepen.io/gaearon/pen/WZpxpz?editors=0010)
 
 Now, no matter which input you edit, `this.state.temperature` and `this.state.scale` in the `Calculator` get updated. One of the inputs gets the value as is, so any user input is preserved, and the other input value is always recalculated based on it.
 

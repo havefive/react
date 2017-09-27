@@ -1,10 +1,8 @@
 /**
- * Copyright 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) 2013-present, Facebook, Inc.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @emails react-core
  */
@@ -15,6 +13,7 @@ describe('ReactDOMProduction', () => {
 
   var React;
   var ReactDOM;
+  var ReactDOMServer;
   var oldProcess;
 
   beforeEach(() => {
@@ -31,6 +30,7 @@ describe('ReactDOMProduction', () => {
     jest.resetModules();
     React = require('react');
     ReactDOM = require('react-dom');
+    ReactDOMServer = require('react-dom/server');
   });
 
   afterEach(() => {
@@ -64,7 +64,7 @@ describe('ReactDOMProduction', () => {
 
     var container = document.createElement('div');
     var inst = ReactDOM.render(
-      <div className="blue">
+      <div className="blue" style={{fontFamily: 'Helvetica'}}>
         <Component key={1}>A</Component>
         <Component key={2}>B</Component>
         <Component key={3}>C</Component>
@@ -74,10 +74,11 @@ describe('ReactDOMProduction', () => {
 
     expect(container.firstChild).toBe(inst);
     expect(inst.className).toBe('blue');
+    expect(inst.style.fontFamily).toBe('Helvetica');
     expect(inst.textContent).toBe('ABC');
 
     ReactDOM.render(
-      <div className="red">
+      <div className="red" style={{fontFamily: 'Comic Sans MS'}}>
         <Component key={2}>B</Component>
         <Component key={1}>A</Component>
         <Component key={3}>C</Component>
@@ -86,11 +87,36 @@ describe('ReactDOMProduction', () => {
     );
 
     expect(inst.className).toBe('red');
+    expect(inst.style.fontFamily).toBe('Comic Sans MS');
     expect(inst.textContent).toBe('BAC');
 
     ReactDOM.unmountComponentAtNode(container);
 
     expect(container.childNodes.length).toBe(0);
+  });
+
+  it('should handle a simple flow (ssr)', () => {
+    class Component extends React.Component {
+      render() {
+        return <span>{this.props.children}</span>;
+      }
+    }
+
+    var container = document.createElement('div');
+    var markup = ReactDOMServer.renderToString(
+      <div className="blue" style={{fontFamily: 'Helvetica'}}>
+        <Component key={1}>A</Component>
+        <Component key={2}>B</Component>
+        <Component key={3}>C</Component>
+      </div>,
+      container,
+    );
+    container.innerHTML = markup;
+    var inst = container.firstChild;
+
+    expect(inst.className).toBe('blue');
+    expect(inst.style.fontFamily).toBe('Helvetica');
+    expect(inst.textContent).toBe('ABC');
   });
 
   it('should call lifecycle methods', () => {
@@ -169,6 +195,7 @@ describe('ReactDOMProduction', () => {
   });
 
   it('should throw with an error code in production', () => {
+    const errorCode = ReactDOMFeatureFlags.useFiber ? 152 : 109;
     expect(function() {
       class Component extends React.Component {
         render() {
@@ -179,8 +206,8 @@ describe('ReactDOMProduction', () => {
       var container = document.createElement('div');
       ReactDOM.render(<Component />, container);
     }).toThrowError(
-      'Minified React error #109; visit ' +
-        'http://facebook.github.io/react/docs/error-decoder.html?invariant=109&args[]=Component' +
+      `Minified React error #${errorCode}; visit ` +
+        `http://facebook.github.io/react/docs/error-decoder.html?invariant=${errorCode}&args[]=Component` +
         ' for the full message or use the non-minified dev environment' +
         ' for full errors and additional helpful warnings.',
     );
@@ -217,10 +244,7 @@ describe('ReactDOMProduction', () => {
       var expectSVG = {ref: el => svgEls.push(el)};
       var expectHTML = {ref: el => htmlEls.push(el)};
       var usePortal = function(tree) {
-        return ReactDOM.unstable_createPortal(
-          tree,
-          document.createElement('div'),
-        );
+        return ReactDOM.createPortal(tree, document.createElement('div'));
       };
       var assertNamespacesMatch = function(tree) {
         var container = document.createElement('div');

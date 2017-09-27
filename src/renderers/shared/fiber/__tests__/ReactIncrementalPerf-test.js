@@ -1,10 +1,8 @@
 /**
- * Copyright 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) 2016-present, Facebook, Inc.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @emails react-core
  */
@@ -14,7 +12,6 @@
 describe('ReactDebugFiberPerf', () => {
   let React;
   let ReactCoroutine;
-  let ReactFeatureFlags;
   let ReactNoop;
   let ReactPortal;
   let PropTypes;
@@ -116,12 +113,11 @@ describe('ReactDebugFiberPerf', () => {
     global.performance = createUserTimingPolyfill();
 
     // Import after the polyfill is set up:
-    React = require('React');
+    React = require('react');
+    ReactNoop = require('react-noop-renderer');
+    // TODO: can we express this test with only public API?
     ReactCoroutine = require('ReactCoroutine');
-    ReactFeatureFlags = require('ReactFeatureFlags');
-    ReactNoop = require('ReactNoop');
     ReactPortal = require('ReactPortal');
-    ReactFeatureFlags.disableNewFiberFeatures = false;
     PropTypes = require('prop-types');
   });
 
@@ -280,7 +276,8 @@ describe('ReactDebugFiberPerf', () => {
   });
 
   it('measures deprioritized work', () => {
-    ReactNoop.performAnimationWork(() => {
+    addComment('Flush the parent');
+    ReactNoop.flushSync(() => {
       ReactNoop.render(
         <Parent>
           <div hidden={true}>
@@ -289,10 +286,8 @@ describe('ReactDebugFiberPerf', () => {
         </Parent>,
       );
     });
-    addComment('Flush the parent');
-    ReactNoop.flushAnimationPri();
     addComment('Flush the child');
-    ReactNoop.flushDeferredPri();
+    ReactNoop.flush();
     expect(getFlameChart()).toMatchSnapshot();
   });
 
@@ -357,7 +352,7 @@ describe('ReactDebugFiberPerf', () => {
 
     class Boundary extends React.Component {
       state = {error: null};
-      unstable_handleError(error) {
+      componentDidCatch(error) {
         this.setState({error});
       }
       render() {
@@ -485,6 +480,22 @@ describe('ReactDebugFiberPerf', () => {
       </Parent>,
     );
     ReactNoop.flush();
+    expect(getFlameChart()).toMatchSnapshot();
+  });
+
+  it('does not schedule an extra callback if setState is called during a synchronous commit phase', () => {
+    class Component extends React.Component {
+      state = {step: 1};
+      componentDidMount() {
+        this.setState({step: 2});
+      }
+      render() {
+        return <span prop={this.state.step} />;
+      }
+    }
+    ReactNoop.flushSync(() => {
+      ReactNoop.render(<Component />);
+    });
     expect(getFlameChart()).toMatchSnapshot();
   });
 });

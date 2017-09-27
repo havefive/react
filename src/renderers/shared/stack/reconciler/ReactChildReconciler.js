@@ -1,10 +1,8 @@
 /**
- * Copyright 2014-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) 2014-present, Facebook, Inc.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @providesModule ReactChildReconciler
  */
@@ -12,13 +10,15 @@
 'use strict';
 
 var KeyEscapeUtils = require('KeyEscapeUtils');
-var ReactFeatureFlags = require('ReactFeatureFlags');
 var ReactReconciler = require('ReactReconciler');
 
 var instantiateReactComponent = require('instantiateReactComponent');
 var shouldUpdateReactComponent = require('shouldUpdateReactComponent');
 var traverseStackChildren = require('traverseStackChildren');
-var warning = require('fbjs/lib/warning');
+
+if (__DEV__) {
+  var warning = require('fbjs/lib/warning');
+}
 
 var ReactComponentTreeHook;
 
@@ -47,10 +47,13 @@ function instantiateChild(childInstances, child, name, selfDebugID) {
     if (!keyUnique) {
       warning(
         false,
-        'flattenChildren(...): Encountered two children with the same key, ' +
-          '`%s`. Child keys must be unique; when two children share a key, only ' +
-          'the first child will be used.%s',
-        KeyEscapeUtils.unescape(name),
+        'flattenChildren(...): ' +
+          'Encountered two children with the same key, `%s`. ' +
+          'Keys should be unique so that components maintain their identity ' +
+          'across updates. Non-unique keys may cause children to be ' +
+          'duplicated and/or omitted — the behavior is unsupported and ' +
+          'could change in a future version.%s',
+        KeyEscapeUtils.unescapeInDev(name),
         ReactComponentTreeHook.getStackAddendumByID(selfDebugID),
       );
     }
@@ -148,17 +151,6 @@ var ReactChildReconciler = {
         );
         nextChildren[name] = prevChild;
       } else {
-        if (
-          !ReactFeatureFlags.prepareNewChildrenBeforeUnmountInStack &&
-          prevChild
-        ) {
-          removedNodes[name] = ReactReconciler.getHostNode(prevChild);
-          ReactReconciler.unmountComponent(
-            prevChild,
-            false /* safely */,
-            false /* skipLifecycle */,
-          );
-        }
         // The child must be instantiated before it's mounted.
         var nextChildInstance = instantiateReactComponent(nextElement, true);
         nextChildren[name] = nextChildInstance;
@@ -173,10 +165,7 @@ var ReactChildReconciler = {
           selfDebugID,
         );
         mountImages.push(nextChildMountImage);
-        if (
-          ReactFeatureFlags.prepareNewChildrenBeforeUnmountInStack &&
-          prevChild
-        ) {
+        if (prevChild) {
           removedNodes[name] = ReactReconciler.getHostNode(prevChild);
           ReactReconciler.unmountComponent(
             prevChild,

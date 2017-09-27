@@ -1,10 +1,8 @@
 /**
- * Copyright 2015-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) 2015-present, Facebook, Inc.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @providesModule ReactServerUpdateQueue
  * @flow
@@ -19,7 +17,7 @@ var warning = require('fbjs/lib/warning');
 import type {Transaction} from 'Transaction';
 
 function warnNoop(
-  publicInstance: ReactComponent<any, any, any>,
+  publicInstance: React$Component<any, any>,
   callerName: string,
 ) {
   if (__DEV__) {
@@ -58,7 +56,7 @@ class ReactServerUpdateQueue {
    * @protected
    * @final
    */
-  isMounted(publicInstance: ReactComponent<any, any, any>): boolean {
+  isMounted(publicInstance: React$Component<any, any>): boolean {
     return false;
   }
 
@@ -74,11 +72,11 @@ class ReactServerUpdateQueue {
    *
    * @param {ReactClass} publicInstance The instance that should rerender.
    * @param {?function} callback Called after component is updated.
-   * @param {?string} Name of the calling function in the public API.
+   * @param {?string} callerName Name of the calling function in the public API.
    * @internal
    */
   enqueueForceUpdate(
-    publicInstance: ReactComponent<any, any, any>,
+    publicInstance: React$Component<any, any>,
     callback?: Function,
     callerName?: string,
   ) {
@@ -103,7 +101,7 @@ class ReactServerUpdateQueue {
    * @internal
    */
   enqueueReplaceState(
-    publicInstance: ReactComponent<any, any, any>,
+    publicInstance: React$Component<any, any>,
     completeState: Object | Function,
     callback?: Function,
     callerName?: string,
@@ -131,7 +129,7 @@ class ReactServerUpdateQueue {
    * @internal
    */
   enqueueSetState(
-    publicInstance: ReactComponent<any, any, any>,
+    publicInstance: React$Component<any, any>,
     partialState: Object | Function,
     callback?: Function,
     callerName?: string,

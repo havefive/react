@@ -1,10 +1,8 @@
 /**
- * Copyright 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) 2013-present, Facebook, Inc.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @emails react-core
  */
@@ -16,7 +14,6 @@ const ReactDOMFeatureFlags = require('ReactDOMFeatureFlags');
 describe('ReactChildren', () => {
   var React;
   var ReactTestUtils;
-  var ReactFeatureFlags;
 
   function normalizeCodeLocInfo(str) {
     return str && str.replace(/at .+?:\d+/g, 'at **');
@@ -25,7 +22,7 @@ describe('ReactChildren', () => {
   beforeEach(() => {
     jest.resetModules();
     React = require('react');
-    ReactTestUtils = require('ReactTestUtils');
+    ReactTestUtils = require('react-dom/test-utils');
   });
 
   it('should support identity for simple', () => {
@@ -841,6 +838,25 @@ describe('ReactChildren', () => {
     ]);
   });
 
+  it('should escape keys', () => {
+    var zero = <div key="1" />;
+    var one = <div key="1=::=2" />;
+    var instance = (
+      <div>
+        {zero}
+        {one}
+      </div>
+    );
+    var mappedChildren = React.Children.map(
+      instance.props.children,
+      kid => kid,
+    );
+    expect(mappedChildren).toEqual([
+      <div key=".$1" />,
+      <div key=".$1=0=2=2=02" />,
+    ]);
+  });
+
   it('should throw on object', () => {
     expect(function() {
       React.Children.forEach({a: 1, b: 2}, function() {}, null);
@@ -864,11 +880,6 @@ describe('ReactChildren', () => {
 
   if (ReactDOMFeatureFlags.useFiber) {
     describe('with fragments enabled', () => {
-      beforeEach(() => {
-        ReactFeatureFlags = require('ReactFeatureFlags');
-        ReactFeatureFlags.disableNewFiberFeatures = false;
-      });
-
       it('warns for keys for arrays of elements in a fragment', () => {
         spyOn(console, 'error');
         class ComponentReturningArray extends React.Component {

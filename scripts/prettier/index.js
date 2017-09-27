@@ -1,9 +1,8 @@
 /**
- * Copyright (c) 2014-present, Facebook, Inc. All rights reserved.
+ * Copyright (c) 2014-present, Facebook, Inc.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 'use strict';
 
@@ -38,7 +37,7 @@ const config = {
     ignore: ['**/third_party/**', '**/node_modules/**'],
   },
   scripts: {
-    patterns: ['scripts/**/*.js'],
+    patterns: ['scripts/**/*.js', 'fixtures/**/*.js'],
     ignore: ['scripts/bench/benchmarks/**'],
     options: {
       'trailing-comma': 'es5',
@@ -48,8 +47,13 @@ const config = {
 
 function exec(command, args) {
   console.log('> ' + [command].concat(args).join(' '));
-  var options = {};
-  return execFileSync(command, args, options).toString();
+  var options = {
+    cwd: process.cwd(),
+    env: process.env,
+    stdio: 'pipe',
+    encoding: 'utf-8',
+  };
+  return execFileSync(command, args, options);
 }
 
 var mergeBase = exec('git', ['merge-base', 'HEAD', 'master']).trim();
@@ -85,7 +89,7 @@ Object.keys(config).forEach(key => {
   args.push(`--${shouldWrite ? 'write' : 'l'}`);
 
   try {
-    exec(prettierCmd, [...args, ...files]);
+    exec(prettierCmd, [...args, ...files]).trim();
   } catch (e) {
     if (!shouldWrite) {
       console.log(
@@ -94,9 +98,10 @@ Object.keys(config).forEach(key => {
             `  This project uses prettier to format all JavaScript code.\n`
           ) +
           chalk.dim(`    Please run `) +
-          chalk.reset('yarn prettier') +
-          chalk.dim(` and add changes to files listed above to your commit.`) +
-          `\n`
+          chalk.reset('yarn prettier-all') +
+          chalk.dim(` and add changes to files listed below to your commit:`) +
+          `\n\n` +
+          e.stdout
       );
       process.exit(1);
     }

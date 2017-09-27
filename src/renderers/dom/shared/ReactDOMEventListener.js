@@ -1,10 +1,8 @@
 /**
- * Copyright 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) 2013-present, Facebook, Inc.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @providesModule ReactDOMEventListener
  */
@@ -12,15 +10,17 @@
 'use strict';
 
 var EventListener = require('fbjs/lib/EventListener');
-var PooledClass = require('PooledClass');
 var ReactDOMComponentTree = require('ReactDOMComponentTree');
+var ReactFiberTreeReflection = require('ReactFiberTreeReflection');
 var ReactGenericBatching = require('ReactGenericBatching');
 var ReactTypeOfWork = require('ReactTypeOfWork');
 
 var getEventTarget = require('getEventTarget');
-var getUnboundedScrollPosition = require('fbjs/lib/getUnboundedScrollPosition');
 
 var {HostRoot} = ReactTypeOfWork;
+
+var CALLBACK_BOOKKEEPING_POOL_SIZE = 10;
+var callbackBookkeepingPool = [];
 
 /**
  * Find the deepest React component completely containing the root of the
@@ -50,24 +50,31 @@ function findRootContainerNode(inst) {
 }
 
 // Used to store ancestor hierarchy in top level callback
-function TopLevelCallbackBookKeeping(topLevelType, nativeEvent, targetInst) {
-  this.topLevelType = topLevelType;
-  this.nativeEvent = nativeEvent;
-  this.targetInst = targetInst;
-  this.ancestors = [];
+function getTopLevelCallbackBookKeeping(topLevelType, nativeEvent, targetInst) {
+  if (callbackBookkeepingPool.length) {
+    const instance = callbackBookkeepingPool.pop();
+    instance.topLevelType = topLevelType;
+    instance.nativeEvent = nativeEvent;
+    instance.targetInst = targetInst;
+    return instance;
+  }
+  return {
+    topLevelType,
+    nativeEvent,
+    targetInst,
+    ancestors: [],
+  };
 }
-Object.assign(TopLevelCallbackBookKeeping.prototype, {
-  destructor: function() {
-    this.topLevelType = null;
-    this.nativeEvent = null;
-    this.targetInst = null;
-    this.ancestors.length = 0;
-  },
-});
-PooledClass.addPoolingTo(
-  TopLevelCallbackBookKeeping,
-  PooledClass.threeArgumentPooler,
-);
+
+function releaseTopLevelCallbackBookKeeping(instance) {
+  instance.topLevelType = null;
+  instance.nativeEvent = null;
+  instance.targetInst = null;
+  instance.ancestors.length = 0;
+  if (callbackBookkeepingPool.length < CALLBACK_BOOKKEEPING_POOL_SIZE) {
+    callbackBookkeepingPool.push(instance);
+  }
+}
 
 function handleTopLevelImpl(bookKeeping) {
   var targetInst = bookKeeping.targetInst;
@@ -99,11 +106,6 @@ function handleTopLevelImpl(bookKeeping) {
       getEventTarget(bookKeeping.nativeEvent),
     );
   }
-}
-
-function scrollValueMonitor(cb) {
-  var scrollPosition = getUnboundedScrollPosition(window);
-  cb(scrollPosition);
 }
 
 var ReactDOMEventListener = {
@@ -164,11 +166,6 @@ var ReactDOMEventListener = {
     );
   },
 
-  monitorScrollValue: function(refresh) {
-    var callback = scrollValueMonitor.bind(null, refresh);
-    EventListener.listen(window, 'scroll', callback);
-  },
-
   dispatchEvent: function(topLevelType, nativeEvent) {
     if (!ReactDOMEventListener._enabled) {
       return;
@@ -178,8 +175,19 @@ var ReactDOMEventListener = {
     var targetInst = ReactDOMComponentTree.getClosestInstanceFromNode(
       nativeEventTarget,
     );
+    if (
+      targetInst !== null &&
+      typeof targetInst.tag === 'number' &&
+      !ReactFiberTreeReflection.isFiberMounted(targetInst)
+    ) {
+      // If we get an event (ex: img onload) before committing that
+      // component's mount, ignore it for now (that is, treat it as if it was an
+      // event on a non-React tree). We might also consider queueing events and
+      // dispatching them after the mount.
+      targetInst = null;
+    }
 
-    var bookKeeping = TopLevelCallbackBookKeeping.getPooled(
+    var bookKeeping = getTopLevelCallbackBookKeeping(
       topLevelType,
       nativeEvent,
       targetInst,
@@ -190,7 +198,7 @@ var ReactDOMEventListener = {
       // `preventDefault`.
       ReactGenericBatching.batchedUpdates(handleTopLevelImpl, bookKeeping);
     } finally {
-      TopLevelCallbackBookKeeping.release(bookKeeping);
+      releaseTopLevelCallbackBookKeeping(bookKeeping);
     }
   },
 };

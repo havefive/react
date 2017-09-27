@@ -1,18 +1,17 @@
 /**
- * Copyright 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) 2016-present, Facebook, Inc.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @emails react-core
  */
 
 'use strict';
 
+// TODO: can we express this test with only public API?
 var setInnerHTML = require('setInnerHTML');
-var DOMNamespaces = require('DOMNamespaces');
+var Namespaces = require('DOMNamespaces').Namespaces;
 
 describe('setInnerHTML', () => {
   describe('when the node has innerHTML property', () => {
@@ -30,7 +29,7 @@ describe('setInnerHTML', () => {
     xit('sets innerHTML on it', () => {
       // Create a mock node that looks like an SVG in IE (without innerHTML)
       var node = {
-        namespaceURI: DOMNamespaces.svg,
+        namespaceURI: Namespaces.svg,
         appendChild: jasmine.createSpy(),
       };
 

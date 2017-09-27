@@ -1,10 +1,8 @@
 /**
- * Copyright 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) 2013-present, Facebook, Inc.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @providesModule ReactDOMFrameScheduling
  * @flow
@@ -12,9 +10,9 @@
 
 'use strict';
 
-// This a built-in polyfill for requestIdleCallback. It works by scheduling
-// a requestAnimationFrame, store the time for the start of the frame, then
-// schedule a postMessage which gets scheduled after paint. Within the
+// This is a built-in polyfill for requestIdleCallback. It works by scheduling
+// a requestAnimationFrame, storing the time for the start of the frame, then
+// scheduling a postMessage which gets scheduled after paint. Within the
 // postMessage handler do as much work as possible until time + frame rate.
 // By separating the idle call into a separate event tick we ensure that
 // layout, paint and other browser work is counted against the available time.
@@ -22,19 +20,27 @@
 
 import type {Deadline} from 'ReactFiberReconciler';
 
-var invariant = require('fbjs/lib/invariant');
 var ExecutionEnvironment = require('fbjs/lib/ExecutionEnvironment');
 
-// TODO: There's no way to cancel these, because Fiber doesn't atm.
-let rAF: (callback: (time: number) => void) => number;
+if (__DEV__) {
+  var warning = require('fbjs/lib/warning');
+
+  if (
+    ExecutionEnvironment.canUseDOM &&
+    typeof requestAnimationFrame !== 'function'
+  ) {
+    warning(
+      false,
+      'React depends on requestAnimationFrame. Make sure that you load a ' +
+        'polyfill in older browsers. http://fb.me/react-polyfills',
+    );
+  }
+}
+
+// TODO: There's no way to cancel, because Fiber doesn't atm.
 let rIC: (callback: (deadline: Deadline) => void) => number;
 
 if (!ExecutionEnvironment.canUseDOM) {
-  rAF = function(frameCallback: (time: number) => void): number {
-    setTimeout(frameCallback, 16);
-    return 0;
-  };
-
   rIC = function(frameCallback: (deadline: Deadline) => void): number {
     setTimeout(() => {
       frameCallback({
@@ -45,14 +51,8 @@ if (!ExecutionEnvironment.canUseDOM) {
     });
     return 0;
   };
-} else if (typeof requestAnimationFrame !== 'function') {
-  invariant(
-    false,
-    'React depends on requestAnimationFrame. Make sure that you load a ' +
-      'polyfill in older browsers.',
-  );
 } else if (typeof requestIdleCallback !== 'function') {
-  // Wrap requestAnimationFrame and polyfill requestIdleCallback.
+  // Polyfill requestIdleCallback.
 
   var scheduledRAFCallback = null;
   var scheduledRICCallback = null;
@@ -90,7 +90,7 @@ if (!ExecutionEnvironment.canUseDOM) {
     isIdleScheduled = false;
     var callback = scheduledRICCallback;
     scheduledRICCallback = null;
-    if (callback) {
+    if (callback !== null) {
       callback(frameDeadlineObject);
     }
   };
@@ -130,21 +130,9 @@ if (!ExecutionEnvironment.canUseDOM) {
     }
     var callback = scheduledRAFCallback;
     scheduledRAFCallback = null;
-    if (callback) {
+    if (callback !== null) {
       callback(rafTime);
     }
-  };
-
-  rAF = function(callback: (time: number) => void): number {
-    // This assumes that we only schedule one callback at a time because that's
-    // how Fiber uses it.
-    scheduledRAFCallback = callback;
-    if (!isAnimationFrameScheduled) {
-      // If rIC didn't already schedule one, we need to schedule a frame.
-      isAnimationFrameScheduled = true;
-      requestAnimationFrame(animationTick);
-    }
-    return 0;
   };
 
   rIC = function(callback: (deadline: Deadline) => void): number {
@@ -162,9 +150,7 @@ if (!ExecutionEnvironment.canUseDOM) {
     return 0;
   };
 } else {
-  rAF = requestAnimationFrame;
   rIC = requestIdleCallback;
 }
 
-exports.rAF = rAF;
 exports.rIC = rIC;

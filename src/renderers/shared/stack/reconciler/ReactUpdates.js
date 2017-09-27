@@ -1,10 +1,8 @@
 /**
- * Copyright 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) 2013-present, Facebook, Inc.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @providesModule ReactUpdates
  */
@@ -12,7 +10,6 @@
 'use strict';
 
 var PooledClass = require('PooledClass');
-var ReactFeatureFlags = require('ReactFeatureFlags');
 var ReactReconciler = require('ReactReconciler');
 var Transaction = require('Transaction');
 
@@ -131,26 +128,11 @@ function runBatchedUpdates(transaction) {
     // that performUpdateIfNecessary is a noop.
     var component = dirtyComponents[i];
 
-    var markerName;
-    if (ReactFeatureFlags.logTopLevelRenders) {
-      var namedComponent = component;
-      // Duck type TopLevelWrapper. This is probably always true.
-      if (component._currentElement.type.isReactTopLevelWrapper) {
-        namedComponent = component._renderedComponent;
-      }
-      markerName = 'React update: ' + namedComponent.getName();
-      console.time(markerName);
-    }
-
     ReactReconciler.performUpdateIfNecessary(
       component,
       transaction.reconcileTransaction,
       updateBatchNumber,
     );
-
-    if (markerName) {
-      console.timeEnd(markerName);
-    }
   }
 }
 

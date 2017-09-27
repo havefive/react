@@ -1,10 +1,8 @@
 /**
- * Copyright 2014-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) 2014-present, Facebook, Inc.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @emails react-core
  */
@@ -13,9 +11,10 @@
 
 var React;
 var ReactDOM;
-var ReactDOMFeatureFlags;
 var ReactTestUtils;
 var TogglingComponent;
+
+var ReactDOMFeatureFlags = require('ReactDOMFeatureFlags');
 
 var log;
 
@@ -25,8 +24,7 @@ describe('ReactEmptyComponent', () => {
 
     React = require('react');
     ReactDOM = require('react-dom');
-    ReactDOMFeatureFlags = require('ReactDOMFeatureFlags');
-    ReactTestUtils = require('ReactTestUtils');
+    ReactTestUtils = require('react-dom/test-utils');
 
     log = jasmine.createSpy();
 
@@ -71,18 +69,20 @@ describe('ReactEmptyComponent', () => {
     expect(container2.children.length).toBe(0);
   });
 
-  it('should still throw when rendering to undefined', () => {
-    class Component extends React.Component {
-      render() {}
-    }
+  if (ReactDOMFeatureFlags.useFiber) {
+    it('should still throw when rendering to undefined', () => {
+      class Component extends React.Component {
+        render() {}
+      }
 
-    expect(function() {
-      ReactTestUtils.renderIntoDocument(<Component />);
-    }).toThrowError(
-      'Component.render(): A valid React element (or null) must be returned. You may ' +
-        'have returned undefined, an array or some other invalid object.',
-    );
-  });
+      expect(function() {
+        ReactTestUtils.renderIntoDocument(<Component />);
+      }).toThrowError(
+        'Component(...): Nothing was returned from render. This usually means a return statement is missing. ' +
+          'Or, to render nothing, return null.',
+      );
+    });
+  }
 
   it('should be able to switch between rendering null and a normal tag', () => {
     var instance1 = (
@@ -232,22 +232,15 @@ describe('ReactEmptyComponent', () => {
   });
 
   it('can render null at the top level', () => {
-    var ReactFeatureFlags = require('ReactFeatureFlags');
-    ReactFeatureFlags.disableNewFiberFeatures = false;
     var div = document.createElement('div');
-
-    try {
-      if (ReactDOMFeatureFlags.useFiber) {
+    if (ReactDOMFeatureFlags.useFiber) {
+      ReactDOM.render(null, div);
+      expect(div.innerHTML).toBe('');
+    } else {
+      // Stack does not implement this.
+      expect(function() {
         ReactDOM.render(null, div);
-        expect(div.innerHTML).toBe('');
-      } else {
-        // Stack does not implement this.
-        expect(function() {
-          ReactDOM.render(null, div);
-        }).toThrowError('ReactDOM.render(): Invalid component element.');
-      }
-    } finally {
-      ReactFeatureFlags.disableNewFiberFeatures = true;
+      }).toThrowError('ReactDOM.render(): Invalid component element.');
     }
   });
 

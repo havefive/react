@@ -1,10 +1,8 @@
 /**
- * Copyright 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) 2013-present, Facebook, Inc.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @emails react-core
  */
@@ -32,7 +30,7 @@ describe('ReactElementValidator', () => {
     PropTypes = require('prop-types');
     React = require('react');
     ReactDOM = require('react-dom');
-    ReactTestUtils = require('ReactTestUtils');
+    ReactTestUtils = require('react-dom/test-utils');
     ComponentClass = class extends React.Component {
       render() {
         return React.createElement('div');
@@ -441,20 +439,20 @@ describe('ReactElementValidator', () => {
   });
 
   it('should warn when accessing .type on an element factory', () => {
-    spyOn(console, 'error');
+    spyOn(console, 'warn');
     function TestComponent() {
       return <div />;
     }
     var TestFactory = React.createFactory(TestComponent);
     expect(TestFactory.type).toBe(TestComponent);
-    expectDev(console.error.calls.count()).toBe(1);
-    expectDev(console.error.calls.argsFor(0)[0]).toBe(
+    expectDev(console.warn.calls.count()).toBe(1);
+    expectDev(console.warn.calls.argsFor(0)[0]).toBe(
       'Warning: Factory.type is deprecated. Access the class directly before ' +
         'passing it to createFactory.',
     );
     // Warn once, not again
     expect(TestFactory.type).toBe(TestComponent);
-    expectDev(console.error.calls.count()).toBe(1);
+    expectDev(console.warn.calls.count()).toBe(1);
   });
 
   it('does not warn when using DOM node as children', () => {

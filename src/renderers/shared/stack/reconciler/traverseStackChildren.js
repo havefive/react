@@ -1,24 +1,27 @@
 /**
- * Copyright 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) 2013-present, Facebook, Inc.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @providesModule traverseStackChildren
  */
 
 'use strict';
 
-var REACT_ELEMENT_TYPE = require('ReactElementSymbol');
-
-var getIteratorFn = require('getIteratorFn');
 var invariant = require('fbjs/lib/invariant');
 var KeyEscapeUtils = require('KeyEscapeUtils');
-var warning = require('fbjs/lib/warning');
+
+var ITERATOR_SYMBOL = typeof Symbol === 'function' && Symbol.iterator;
+var FAUX_ITERATOR_SYMBOL = '@@iterator'; // Before Symbol spec.
+// The Symbol used to tag the ReactElement type. If there is no native Symbol
+// nor polyfill, then a plain number is used for performance.
+var REACT_ELEMENT_TYPE =
+  (typeof Symbol === 'function' && Symbol.for && Symbol.for('react.element')) ||
+  0xeac7;
 
 if (__DEV__) {
+  var warning = require('fbjs/lib/warning');
   var {
     getCurrentStackAddendum,
   } = require('ReactGlobalSharedState').ReactComponentTreeHook;
@@ -114,8 +117,10 @@ function traverseStackChildrenImpl(
       );
     }
   } else {
-    var iteratorFn = getIteratorFn(children);
-    if (iteratorFn) {
+    var iteratorFn =
+      (ITERATOR_SYMBOL && children[ITERATOR_SYMBOL]) ||
+      children[FAUX_ITERATOR_SYMBOL];
+    if (typeof iteratorFn === 'function') {
       if (__DEV__) {
         // Warn about using Maps as children
         if (iteratorFn === children.entries) {

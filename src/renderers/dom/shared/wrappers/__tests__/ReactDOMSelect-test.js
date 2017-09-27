@@ -1,10 +1,8 @@
 /**
- * Copyright 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) 2013-present, Facebook, Inc.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @emails react-core
  */
@@ -23,7 +21,7 @@ describe('ReactDOMSelect', () => {
     React = require('react');
     ReactDOM = require('react-dom');
     ReactDOMServer = require('react-dom/server');
-    ReactTestUtils = require('ReactTestUtils');
+    ReactTestUtils = require('react-dom/test-utils');
   });
 
   it('should allow setting `defaultValue`', () => {
@@ -126,6 +124,22 @@ describe('ReactDOMSelect', () => {
       container,
     );
     expect(node.value).toEqual('gorilla');
+  });
+
+  it('should default to the first non-disabled option', () => {
+    var stub = (
+      <select defaultValue="">
+        <option disabled={true}>Disabled</option>
+        <option disabled={true}>Still Disabled</option>
+        <option>0</option>
+        <option disabled={true}>Also Disabled</option>
+      </select>
+    );
+    var container = document.createElement('div');
+    stub = ReactDOM.render(stub, container);
+    var node = ReactDOM.findDOMNode(stub);
+    expect(node.options[0].selected).toBe(false);
+    expect(node.options[2].selected).toBe(true);
   });
 
   it('should allow setting `value` to __proto__', () => {
@@ -588,5 +602,69 @@ describe('ReactDOMSelect', () => {
     expect(node.options[0].selected).toBe(false); // a
     expect(node.options[1].selected).toBe(true); // b
     expect(node.options[2].selected).toBe(false); // c
+  });
+
+  it('should allow controlling `value` in a nested render', () => {
+    var selectNode;
+
+    class Parent extends React.Component {
+      state = {
+        value: 'giraffe',
+      };
+
+      componentDidMount() {
+        this._renderNested();
+      }
+
+      componentDidUpdate() {
+        this._renderNested();
+      }
+
+      _handleChange(event) {
+        this.setState({value: event.target.value});
+      }
+
+      _renderNested() {
+        ReactDOM.render(
+          <select
+            onChange={this._handleChange.bind(this)}
+            ref={n => (selectNode = n)}
+            value={this.state.value}>
+            <option value="monkey">A monkey!</option>
+            <option value="giraffe">A giraffe!</option>
+            <option value="gorilla">A gorilla!</option>
+          </select>,
+          this._nestingContainer,
+        );
+      }
+
+      render() {
+        return <div ref={n => (this._nestingContainer = n)} />;
+      }
+    }
+
+    var container = document.createElement('div');
+
+    document.body.appendChild(container);
+
+    ReactDOM.render(<Parent />, container);
+
+    expect(selectNode.value).toBe('giraffe');
+
+    selectNode.value = 'gorilla';
+
+    let nativeEvent = document.createEvent('Event');
+    nativeEvent.initEvent('input', true, true);
+    selectNode.dispatchEvent(nativeEvent);
+
+    expect(selectNode.value).toEqual('gorilla');
+
+    nativeEvent = document.createEvent('Event');
+    nativeEvent.initEvent('change', true, true);
+    selectNode.dispatchEvent(nativeEvent);
+
+    expect(selectNode.value).toEqual('gorilla');
+
+    document.body.removeChild(container);
   });
 });

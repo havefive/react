@@ -1,21 +1,20 @@
 /**
- * Copyright 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) 2013-present, Facebook, Inc.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @providesModule ReactDOMNullInputValuePropHook
  */
 
 'use strict';
 
-var ReactDebugCurrentFiber = require('ReactDebugCurrentFiber');
-var warning = require('fbjs/lib/warning');
-
 if (__DEV__) {
-  var {ReactComponentTreeHook} = require('ReactGlobalSharedState');
+  var warning = require('fbjs/lib/warning');
+  var {
+    ReactComponentTreeHook,
+    ReactDebugCurrentFrame,
+  } = require('ReactGlobalSharedState');
   var {getStackAddendumByID} = ReactComponentTreeHook;
 }
 
@@ -26,8 +25,9 @@ function getStackAddendum(debugID) {
     // This can only happen on Stack
     return getStackAddendumByID(debugID);
   } else {
-    // This can only happen on Fiber
-    return ReactDebugCurrentFiber.getCurrentFiberStackAddendum();
+    // This can only happen on Fiber / Server
+    var stack = ReactDebugCurrentFrame.getStackAddendum();
+    return stack != null ? stack : '';
   }
 }
 

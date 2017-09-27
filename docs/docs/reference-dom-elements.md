@@ -16,7 +16,7 @@ redirect_from:
 
 React implements a browser-independent DOM system for performance and cross-browser compatibility. We took the opportunity to clean up a few rough edges in browser DOM implementations.
 
-In React, all DOM properties and attributes (including event handlers) should be camelCased. For example, the HTML attribute `tabindex` corresponds to the attribute `tabIndex` in React. The exception is `aria-*` and `data-*` attributes, which should be lowercased.
+In React, all DOM properties and attributes (including event handlers) should be camelCased. For example, the HTML attribute `tabindex` corresponds to the attribute `tabIndex` in React. The exception is `aria-*` and `data-*` attributes, which should be lowercased. For example, you can keep `aria-label` as `aria-label`.
 
 ## Differences In Attributes
 
@@ -98,14 +98,26 @@ The `value` attribute is supported by `<input>` and `<textarea>` components. You
 
 ## All Supported HTML Attributes
 
-React supports all `data-*` and `aria-*` attributes as well as these attributes:
+As of React 16, any standard [or custom](/react/blog/2017/09/08/dom-attributes-in-react-16.html) DOM attributes are fully supported.
+
+React has always provided a JavaScript-centric API to the DOM. Since React components often take both custom and DOM-related props, React uses the `camelCase` convention just like the DOM APIs:
+
+```js
+<div tabIndex="-1" />      // Just like node.tabIndex DOM API
+<div className="Button" /> // Just like node.className DOM API
+<input readOnly={true} />  // Just like node.readOnly DOM API
+```
+
+These props work similarly to the corresponding HTML attributes, with the exception of the special cases documented above.
+
+Some of the DOM attributes supported by React include:
 
 ```
 accept acceptCharset accessKey action allowFullScreen allowTransparency alt
 async autoComplete autoFocus autoPlay capture cellPadding cellSpacing challenge
 charSet checked cite classID className colSpan cols content contentEditable
-contextMenu controls coords crossOrigin data dateTime default defer dir
-disabled download draggable encType form formAction formEncType formMethod
+contextMenu controls controlsList coords crossOrigin data dateTime default defer
+dir disabled download draggable encType form formAction formEncType formMethod
 formNoValidate formTarget frameBorder headers height hidden high href hrefLang
 htmlFor httpEquiv icon id inputMode integrity is keyParams keyType kind label
 lang list loop low manifest marginHeight marginWidth max maxLength media
@@ -116,24 +128,7 @@ selected shape size sizes span spellCheck src srcDoc srcLang srcSet start step
 style summary tabIndex target title type useMap value width wmode wrap
 ```
 
-These RDFa attributes are supported (several RDFa attributes overlap with standard HTML attributes and thus are excluded from this list):
-
-```
-about datatype inlist prefix property resource typeof vocab
-```
-
-In addition, the following non-standard attributes are supported:
-
-- `autoCapitalize autoCorrect` for Mobile Safari.
-- `color` for `<link rel="mask-icon" />` in Safari.
-- `itemProp itemScope itemType itemRef itemID` for [HTML5 microdata](http://schema.org/docs/gs.html).
-- `security` for older versions of Internet Explorer.
-- `unselectable` for Internet Explorer.
-- `results autoSave` for WebKit/Blink input fields of type `search`.
-
-## All Supported SVG Attributes
-
-React supports these SVG attributes:
+Similarly, all SVG attributes are fully supported:
 
 ```
 accentHeight accumulate additive alignmentBaseline allowReorder alphabetic
@@ -170,5 +165,6 @@ vertOriginX vertOriginY viewBox viewTarget visibility widths wordSpacing
 writingMode x x1 x2 xChannelSelector xHeight xlinkActuate xlinkArcrole
 xlinkHref xlinkRole xlinkShow xlinkTitle xlinkType xmlns xmlnsXlink xmlBase
 xmlLang xmlSpace y y1 y2 yChannelSelector z zoomAndPan
-
 ```
+
+You may also use custom attributes as long as they're fully lowercase.

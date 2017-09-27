@@ -1,10 +1,8 @@
 /**
- * Copyright 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) 2013-present, Facebook, Inc.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @emails react-core
  */
@@ -13,7 +11,6 @@
 
 var EventPluginHub;
 var ResponderEventPlugin;
-var EventPluginUtils;
 
 var touch = function(nodeHandle, i) {
   return {target: nodeHandle, identifier: i};
@@ -383,16 +380,22 @@ describe('ResponderEventPlugin', () => {
   beforeEach(() => {
     jest.resetModules();
 
-    EventPluginHub = require('EventPluginHub');
-    EventPluginUtils = require('EventPluginUtils');
-    ResponderEventPlugin = require('ResponderEventPlugin');
+    const ReactDOM = require('react-dom');
+    const ReactDOMUnstableNativeDependencies = require('react-dom/unstable-native-dependencies');
+    EventPluginHub =
+      ReactDOM.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED
+        .EventPluginHub;
+    const injectComponentTree =
+      ReactDOMUnstableNativeDependencies.injectComponentTree;
+    ResponderEventPlugin =
+      ReactDOMUnstableNativeDependencies.ResponderEventPlugin;
 
     deleteAllListeners(GRANDPARENT_INST);
     deleteAllListeners(PARENT_INST);
     deleteAllListeners(CHILD_INST);
     deleteAllListeners(CHILD_INST2);
 
-    EventPluginUtils.injection.injectComponentTree({
+    injectComponentTree({
       getInstanceFromNode,
       getNodeFromInstance,
     });

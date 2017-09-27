@@ -80,11 +80,10 @@ The core team is monitoring for pull requests. We will review your pull request 
 2. If you've added code that should be tested, add tests!
 3. If you've changed APIs, update the documentation.
 4. Ensure the test suite passes (`npm test`).
-5. Make sure your code lints (`npm run lint`).
-6. Format your code with [prettier](https://github.com/prettier/prettier) (`npm run prettier`).
+5. Format your code with [prettier](https://github.com/prettier/prettier) (`npm run prettier`).
+6. Make sure your code lints (`npm run lint`).
 7. Run the [Flow](https://flowtype.org/) typechecks (`npm run flow`).
-8. If you added or removed any tests, run `./scripts/fiber/record-tests` before submitting the pull request, and commit the resulting changes. You can see the full output of fiber tests with `REACT_DOM_JEST_USE_FIBER=1 npm test`.
-9. If you haven't already, complete the CLA.
+8. If you haven't already, complete the CLA.
 
 ### Contributor License Agreement (CLA)
 
@@ -117,7 +116,7 @@ First, run `npm run build`. This will produce pre-built bundles in `build` folde
 
 The easiest way to try your changes is to run `npm run build` and then open `fixtures/packaging/babel-standalone/dev.html`. This file already uses `react.js` from the `build` folder so it will pick up your changes.
 
-If you want to try your changes in your existing React project, you may copy `build/dist/react.development.js`, `build/dist/react-dom.development.js`, or any other build products into your app and use them instead of the stable version. If your project uses React from npm, you may delete `react` and `react-dom` in its dependencies and use `npm link` to point them to your local `build` folder:
+If you want to try your changes in your existing React project, you may copy `build/umd/react.development.js`, `build/umd/react-dom.development.js`, or any other build products into your app and use them instead of the stable version. If your project uses React from npm, you may delete `react` and `react-dom` in its dependencies and use `npm link` to point them to your local `build` folder:
 
 ```sh
 cd your_project
@@ -157,7 +156,7 @@ React team meets once a week to discuss the development of React, future plans, 
 
 ### License
 
-By contributing to React, you agree that your contributions will be licensed under its BSD license.
+By contributing to React, you agree that your contributions will be licensed under its MIT license.
 
 ### What Next?
 

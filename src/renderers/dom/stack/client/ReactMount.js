@@ -1,10 +1,8 @@
 /**
- * Copyright 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) 2013-present, Facebook, Inc.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @providesModule ReactMount
  */
@@ -16,8 +14,6 @@ var DOMProperty = require('DOMProperty');
 var React = require('react');
 var ReactDOMComponentTree = require('ReactDOMComponentTree');
 var ReactDOMContainerInfo = require('ReactDOMContainerInfo');
-var ReactDOMFeatureFlags = require('ReactDOMFeatureFlags');
-var ReactFeatureFlags = require('ReactFeatureFlags');
 var ReactInstanceMap = require('ReactInstanceMap');
 var ReactInstrumentation = require('ReactInstrumentation');
 var ReactMarkupChecksum = require('ReactMarkupChecksum');
@@ -87,7 +83,7 @@ function internalGetID(node) {
 /**
  * Mounts this component and inserts it into the DOM.
  *
- * @param {ReactComponent} componentInstance The instance to mount.
+ * @param {ReactComponent} wrapperInstance The instance to mount.
  * @param {DOMElement} container DOM element to mount into.
  * @param {ReactReconcileTransaction} transaction
  * @param {boolean} shouldReuseMarkup If true, do not insert markup
@@ -99,16 +95,6 @@ function mountComponentIntoNode(
   shouldReuseMarkup,
   context,
 ) {
-  var markerName;
-  if (ReactFeatureFlags.logTopLevelRenders) {
-    var wrappedElement = wrapperInstance._currentElement.props.child;
-    var type = wrappedElement.type;
-    markerName =
-      'React mount: ' +
-      (typeof type === 'string' ? type : type.displayName || type.name);
-    console.time(markerName);
-  }
-
   var markup = ReactReconciler.mountComponent(
     wrapperInstance,
     transaction,
@@ -117,10 +103,6 @@ function mountComponentIntoNode(
     context,
     0 /* parentDebugID */,
   );
-
-  if (markerName) {
-    console.timeEnd(markerName);
-  }
 
   wrapperInstance._renderedComponent._topLevelWrapper = wrapperInstance;
   ReactMount._mountImageIntoNode(
@@ -147,7 +129,7 @@ function batchedMountComponentIntoNode(
 ) {
   var transaction = ReactUpdates.ReactReconcileTransaction.getPooled(
     /* useCreateElement */
-    !shouldReuseMarkup && ReactDOMFeatureFlags.useCreateElement,
+    !shouldReuseMarkup,
   );
   transaction.perform(
     mountComponentIntoNode,

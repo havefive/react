@@ -1,10 +1,8 @@
 /**
- * Copyright 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) 2013-present, Facebook, Inc.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @providesModule ReactFiberClassComponent
  * @flow
@@ -40,6 +38,7 @@ var getComponentName = require('getComponentName');
 var shallowEqual = require('fbjs/lib/shallowEqual');
 var invariant = require('fbjs/lib/invariant');
 
+const fakeInternalInstance = {};
 const isArray = Array.isArray;
 
 if (__DEV__) {
@@ -54,6 +53,27 @@ if (__DEV__) {
       callback,
     );
   };
+
+  // This is so gross but it's at least non-critical and can be removed if
+  // it causes problems. This is meant to give a nicer error message for
+  // ReactDOM15.unstable_renderSubtreeIntoContainer(reactDOM16Component,
+  // ...)) which otherwise throws a "_processChildContext is not a function"
+  // exception.
+  Object.defineProperty(fakeInternalInstance, '_processChildContext', {
+    enumerable: false,
+    value: function() {
+      invariant(
+        false,
+        '_processChildContext is not available in React 16+. This likely ' +
+          'means you have multiple copies of React and are attempting to nest ' +
+          'a React 15 tree inside a React 16 tree using ' +
+          "unstable_renderSubtreeIntoContainer, which isn't supported. Try " +
+          'to make sure you have only one copy of React (and ideally, switch ' +
+          'to ReactDOM.createPortal).',
+      );
+    },
+  });
+  Object.freeze(fakeInternalInstance);
 }
 
 module.exports = function(
@@ -283,6 +303,9 @@ module.exports = function(
     workInProgress.stateNode = instance;
     // The instance needs access to the fiber so that it can schedule updates
     ReactInstanceMap.set(instance, workInProgress);
+    if (__DEV__) {
+      instance._reactInternalInstance = fakeInternalInstance;
+    }
   }
 
   function constructClassInstance(workInProgress: Fiber, props: any): any {
@@ -362,6 +385,8 @@ module.exports = function(
     workInProgress: Fiber,
     priorityLevel: PriorityLevel,
   ): void {
+    const current = workInProgress.alternate;
+
     if (__DEV__) {
       checkClassInstance(workInProgress);
     }
@@ -386,7 +411,8 @@ module.exports = function(
     if (
       ReactFeatureFlags.enableAsyncSubtreeAPI &&
       workInProgress.type != null &&
-      workInProgress.type.unstable_asyncUpdates === true
+      workInProgress.type.prototype != null &&
+      workInProgress.type.prototype.unstable_isAsyncReactComponent === true
     ) {
       workInProgress.internalContextTag |= AsyncUpdates;
     }
@@ -398,6 +424,7 @@ module.exports = function(
       const updateQueue = workInProgress.updateQueue;
       if (updateQueue !== null) {
         instance.state = beginUpdateQueue(
+          current,
           workInProgress,
           updateQueue,
           instance,
@@ -414,108 +441,108 @@ module.exports = function(
 
   // Called on a preexisting class instance. Returns false if a resumed render
   // could be reused.
-  function resumeMountClassInstance(
-    workInProgress: Fiber,
-    priorityLevel: PriorityLevel,
-  ): boolean {
-    const instance = workInProgress.stateNode;
-    resetInputPointers(workInProgress, instance);
+  // function resumeMountClassInstance(
+  //   workInProgress: Fiber,
+  //   priorityLevel: PriorityLevel,
+  // ): boolean {
+  //   const instance = workInProgress.stateNode;
+  //   resetInputPointers(workInProgress, instance);
 
-    let newState = workInProgress.memoizedState;
-    let newProps = workInProgress.pendingProps;
-    if (!newProps) {
-      // If there isn't any new props, then we'll reuse the memoized props.
-      // This could be from already completed work.
-      newProps = workInProgress.memoizedProps;
-      invariant(
-        newProps != null,
-        'There should always be pending or memoized props. This error is ' +
-          'likely caused by a bug in React. Please file an issue.',
-      );
-    }
-    const newUnmaskedContext = getUnmaskedContext(workInProgress);
-    const newContext = getMaskedContext(workInProgress, newUnmaskedContext);
+  //   let newState = workInProgress.memoizedState;
+  //   let newProps = workInProgress.pendingProps;
+  //   if (!newProps) {
+  //     // If there isn't any new props, then we'll reuse the memoized props.
+  //     // This could be from already completed work.
+  //     newProps = workInProgress.memoizedProps;
+  //     invariant(
+  //       newProps != null,
+  //       'There should always be pending or memoized props. This error is ' +
+  //         'likely caused by a bug in React. Please file an issue.',
+  //     );
+  //   }
+  //   const newUnmaskedContext = getUnmaskedContext(workInProgress);
+  //   const newContext = getMaskedContext(workInProgress, newUnmaskedContext);
 
-    const oldContext = instance.context;
-    const oldProps = workInProgress.memoizedProps;
+  //   const oldContext = instance.context;
+  //   const oldProps = workInProgress.memoizedProps;
 
-    if (
-      typeof instance.componentWillReceiveProps === 'function' &&
-      (oldProps !== newProps || oldContext !== newContext)
-    ) {
-      callComponentWillReceiveProps(
-        workInProgress,
-        instance,
-        newProps,
-        newContext,
-      );
-    }
+  //   if (
+  //     typeof instance.componentWillReceiveProps === 'function' &&
+  //     (oldProps !== newProps || oldContext !== newContext)
+  //   ) {
+  //     callComponentWillReceiveProps(
+  //       workInProgress,
+  //       instance,
+  //       newProps,
+  //       newContext,
+  //     );
+  //   }
 
-    // Process the update queue before calling shouldComponentUpdate
-    const updateQueue = workInProgress.updateQueue;
-    if (updateQueue !== null) {
-      newState = beginUpdateQueue(
-        workInProgress,
-        updateQueue,
-        instance,
-        newState,
-        newProps,
-        priorityLevel,
-      );
-    }
+  //   // Process the update queue before calling shouldComponentUpdate
+  //   const updateQueue = workInProgress.updateQueue;
+  //   if (updateQueue !== null) {
+  //     newState = beginUpdateQueue(
+  //       workInProgress,
+  //       updateQueue,
+  //       instance,
+  //       newState,
+  //       newProps,
+  //       priorityLevel,
+  //     );
+  //   }
 
-    // TODO: Should we deal with a setState that happened after the last
-    // componentWillMount and before this componentWillMount? Probably
-    // unsupported anyway.
+  //   // TODO: Should we deal with a setState that happened after the last
+  //   // componentWillMount and before this componentWillMount? Probably
+  //   // unsupported anyway.
 
-    if (
-      !checkShouldComponentUpdate(
-        workInProgress,
-        workInProgress.memoizedProps,
-        newProps,
-        workInProgress.memoizedState,
-        newState,
-        newContext,
-      )
-    ) {
-      // Update the existing instance's state, props, and context pointers even
-      // though we're bailing out.
-      instance.props = newProps;
-      instance.state = newState;
-      instance.context = newContext;
-      return false;
-    }
+  //   if (
+  //     !checkShouldComponentUpdate(
+  //       workInProgress,
+  //       workInProgress.memoizedProps,
+  //       newProps,
+  //       workInProgress.memoizedState,
+  //       newState,
+  //       newContext,
+  //     )
+  //   ) {
+  //     // Update the existing instance's state, props, and context pointers even
+  //     // though we're bailing out.
+  //     instance.props = newProps;
+  //     instance.state = newState;
+  //     instance.context = newContext;
+  //     return false;
+  //   }
 
-    // Update the input pointers now so that they are correct when we call
-    // componentWillMount
-    instance.props = newProps;
-    instance.state = newState;
-    instance.context = newContext;
+  //   // Update the input pointers now so that they are correct when we call
+  //   // componentWillMount
+  //   instance.props = newProps;
+  //   instance.state = newState;
+  //   instance.context = newContext;
 
-    if (typeof instance.componentWillMount === 'function') {
-      callComponentWillMount(workInProgress, instance);
-      // componentWillMount may have called setState. Process the update queue.
-      const newUpdateQueue = workInProgress.updateQueue;
-      if (newUpdateQueue !== null) {
-        newState = beginUpdateQueue(
-          workInProgress,
-          newUpdateQueue,
-          instance,
-          newState,
-          newProps,
-          priorityLevel,
-        );
-      }
-    }
+  //   if (typeof instance.componentWillMount === 'function') {
+  //     callComponentWillMount(workInProgress, instance);
+  //     // componentWillMount may have called setState. Process the update queue.
+  //     const newUpdateQueue = workInProgress.updateQueue;
+  //     if (newUpdateQueue !== null) {
+  //       newState = beginUpdateQueue(
+  //         workInProgress,
+  //         newUpdateQueue,
+  //         instance,
+  //         newState,
+  //         newProps,
+  //         priorityLevel,
+  //       );
+  //     }
+  //   }
 
-    if (typeof instance.componentDidMount === 'function') {
-      workInProgress.effectTag |= Update;
-    }
+  //   if (typeof instance.componentDidMount === 'function') {
+  //     workInProgress.effectTag |= Update;
+  //   }
 
-    instance.state = newState;
+  //   instance.state = newState;
 
-    return true;
-  }
+  //   return true;
+  // }
 
   // Invokes the update life-cycles and returns false if it shouldn't rerender.
   function updateClassInstance(
@@ -559,14 +586,14 @@ module.exports = function(
     }
 
     // Compute the next state using the memoized state and the update queue.
-    const updateQueue = workInProgress.updateQueue;
     const oldState = workInProgress.memoizedState;
     // TODO: Previous state can be null.
     let newState;
-    if (updateQueue !== null) {
+    if (workInProgress.updateQueue !== null) {
       newState = beginUpdateQueue(
+        current,
         workInProgress,
-        updateQueue,
+        workInProgress.updateQueue,
         instance,
         oldState,
         newProps,
@@ -580,7 +607,8 @@ module.exports = function(
       oldProps === newProps &&
       oldState === newState &&
       !hasContextChanged() &&
-      !(updateQueue !== null && updateQueue.hasForceUpdate)
+      !(workInProgress.updateQueue !== null &&
+        workInProgress.updateQueue.hasForceUpdate)
     ) {
       // If an update was already in progress, we should schedule an Update
       // effect even though we're bailing out, so that cWU/cDU are called.
@@ -648,7 +676,7 @@ module.exports = function(
     adoptClassInstance,
     constructClassInstance,
     mountClassInstance,
-    resumeMountClassInstance,
+    // resumeMountClassInstance,
     updateClassInstance,
   };
 };

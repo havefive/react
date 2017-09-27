@@ -1,10 +1,8 @@
 /**
- * Copyright 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) 2013-present, Facebook, Inc.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @emails react-core
  */
@@ -16,11 +14,13 @@ var ReactTestUtils;
 
 var AutoMockedComponent;
 var MockedComponent;
+var ReactDOMServer;
 
 describe('ReactMockedComponent', () => {
   beforeEach(() => {
     React = require('react');
-    ReactTestUtils = require('ReactTestUtils');
+    ReactTestUtils = require('react-dom/test-utils');
+    ReactDOMServer = require('react-dom/server');
 
     AutoMockedComponent = jest.genMockFromModule(
       'ReactMockedComponentTestComponent',
@@ -35,6 +35,12 @@ describe('ReactMockedComponent', () => {
   it('should allow an implicitly mocked component to be rendered without warnings', () => {
     spyOn(console, 'error');
     ReactTestUtils.renderIntoDocument(<AutoMockedComponent />);
+    expectDev(console.error.calls.count()).toBe(0);
+  });
+
+  it('should allow an implicitly mocked component to be rendered without warnings (SSR)', () => {
+    spyOn(console, 'error');
+    ReactDOMServer.renderToString(<AutoMockedComponent />);
     expectDev(console.error.calls.count()).toBe(0);
   });
 

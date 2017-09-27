@@ -1,15 +1,15 @@
 /**
- * Copyright 2015-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) 2015-present, Facebook, Inc.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @emails react-core
  */
 
 'use strict';
+
+var ReactDOMFeatureFlags = require('ReactDOMFeatureFlags');
 
 describe('ReactDOMComponentTree', () => {
   var React;
@@ -21,7 +21,11 @@ describe('ReactDOMComponentTree', () => {
     var container = document.createElement('div');
     // Force server-rendering path:
     container.innerHTML = ReactDOMServer.renderToString(elt);
-    return ReactDOM.render(elt, container);
+    if (ReactDOMFeatureFlags.useFiber) {
+      return ReactDOM.hydrate(elt, container);
+    } else {
+      return ReactDOM.render(elt, container);
+    }
   }
 
   function getTypeOf(instance) {
@@ -41,6 +45,7 @@ describe('ReactDOMComponentTree', () => {
   beforeEach(() => {
     React = require('react');
     ReactDOM = require('react-dom');
+    // TODO: can we express this test with only public API?
     ReactDOMComponentTree = require('ReactDOMComponentTree');
     ReactDOMServer = require('react-dom/server');
   });

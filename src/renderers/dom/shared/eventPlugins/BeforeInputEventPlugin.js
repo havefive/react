@@ -1,10 +1,8 @@
 /**
- * Copyright 2013-present Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) 2013-present, Facebook, Inc.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @providesModule BeforeInputEventPlugin
  */
@@ -209,8 +207,8 @@ function getDataFromCustomEvent(nativeEvent) {
   return null;
 }
 
-// Track the current IME composition fallback object, if any.
-var currentComposition = null;
+// Track the current IME composition status, if any.
+var isComposing = false;
 
 /**
  * @return {?object} A SyntheticCompositionEvent.
@@ -226,7 +224,7 @@ function extractCompositionEvent(
 
   if (canUseCompositionEvent) {
     eventType = getCompositionEventType(topLevelType);
-  } else if (!currentComposition) {
+  } else if (!isComposing) {
     if (isFallbackCompositionStart(topLevelType, nativeEvent)) {
       eventType = eventTypes.compositionStart;
     }
@@ -241,13 +239,11 @@ function extractCompositionEvent(
   if (useFallbackCompositionData) {
     // The current composition is stored statically and must not be
     // overwritten while composition continues.
-    if (!currentComposition && eventType === eventTypes.compositionStart) {
-      currentComposition = FallbackCompositionState.getPooled(
-        nativeEventTarget,
-      );
+    if (!isComposing && eventType === eventTypes.compositionStart) {
+      isComposing = FallbackCompositionState.initialize(nativeEventTarget);
     } else if (eventType === eventTypes.compositionEnd) {
-      if (currentComposition) {
-        fallbackData = currentComposition.getData();
+      if (isComposing) {
+        fallbackData = FallbackCompositionState.getData();
       }
     }
   }
@@ -275,7 +271,7 @@ function extractCompositionEvent(
 }
 
 /**
- * @param {string} topLevelType Record from `BrowserEventConstants`.
+ * @param {TopLevelTypes} topLevelType Record from `BrowserEventConstants`.
  * @param {object} nativeEvent Native browser event.
  * @return {?string} The string corresponding to this `beforeInput` event.
  */
@@ -338,15 +334,15 @@ function getFallbackBeforeInputChars(topLevelType: TopLevelTypes, nativeEvent) {
   // try to extract the composed characters from the fallback object.
   // If composition event is available, we extract a string only at
   // compositionevent, otherwise extract it at fallback events.
-  if (currentComposition) {
+  if (isComposing) {
     if (
       topLevelType === 'topCompositionEnd' ||
       (!canUseCompositionEvent &&
         isFallbackCompositionEnd(topLevelType, nativeEvent))
     ) {
-      var chars = currentComposition.getData();
-      FallbackCompositionState.release(currentComposition);
-      currentComposition = null;
+      var chars = FallbackCompositionState.getData();
+      FallbackCompositionState.reset();
+      isComposing = false;
       return chars;
     }
     return null;
@@ -374,8 +370,18 @@ function getFallbackBeforeInputChars(topLevelType: TopLevelTypes, nativeEvent) {
        *   being used. Ex: `Cmd+C`. No character is inserted, and no
        *   `input` event will occur.
        */
-      if (nativeEvent.which && !isKeypressCommand(nativeEvent)) {
-        return String.fromCharCode(nativeEvent.which);
+      if (!isKeypressCommand(nativeEvent)) {
+        // IE fires the `keypress` event when a user types an emoji via
+        // Touch keyboard of Windows.  In such a case, the `char` property
+        // holds an emoji character like `\uD83D\uDE0A`.  Because its length
+        // is 2, the property `which` does not represent an emoji correctly.
+        // In such a case, we directly return the `char` property instead of
+        // using `which`.
+        if (nativeEvent.char && nativeEvent.char.length > 1) {
+          return nativeEvent.char;
+        } else if (nativeEvent.which) {
+          return String.fromCharCode(nativeEvent.which);
+        }
       }
       return null;
     case 'topCompositionEnd':

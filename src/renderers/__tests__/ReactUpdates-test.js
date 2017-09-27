@@ -1,10 +1,8 @@
 /**
- * Copyright 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) 2013-present, Facebook, Inc.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @emails react-core
  */
@@ -21,7 +19,7 @@ describe('ReactUpdates', () => {
     React = require('react');
     ReactDOM = require('react-dom');
     ReactDOMFeatureFlags = require('ReactDOMFeatureFlags');
-    ReactTestUtils = require('ReactTestUtils');
+    ReactTestUtils = require('react-dom/test-utils');
   });
 
   it('should batch state when updating state twice', () => {
@@ -522,10 +520,7 @@ describe('ReactUpdates', () => {
         var portal = null;
         // If we're using Fiber, we use Portals instead to achieve this.
         if (ReactDOMFeatureFlags.useFiber) {
-          portal = ReactDOM.unstable_createPortal(
-            <B ref={n => (b = n)} />,
-            bContainer,
-          );
+          portal = ReactDOM.createPortal(<B ref={n => (b = n)} />, bContainer);
         }
         return <div>A{this.state.x}{portal}</div>;
       }
@@ -823,40 +818,6 @@ describe('ReactUpdates', () => {
     });
 
     expect(renderCount).toBe(1);
-  });
-
-  it('marks top-level updates', () => {
-    var ReactFeatureFlags = require('ReactFeatureFlags');
-
-    class Foo extends React.Component {
-      render() {
-        return <Bar />;
-      }
-    }
-
-    class Bar extends React.Component {
-      render() {
-        return <div />;
-      }
-    }
-
-    var container = document.createElement('div');
-    ReactDOM.render(<Foo />, container);
-
-    try {
-      ReactFeatureFlags.logTopLevelRenders = true;
-      spyOn(console, 'time');
-      spyOn(console, 'timeEnd');
-
-      ReactDOM.render(<Foo />, container);
-
-      expect(console.time.calls.count()).toBe(1);
-      expect(console.time.calls.argsFor(0)[0]).toBe('React update: Foo');
-      expect(console.timeEnd.calls.count()).toBe(1);
-      expect(console.timeEnd.calls.argsFor(0)[0]).toBe('React update: Foo');
-    } finally {
-      ReactFeatureFlags.logTopLevelRenders = false;
-    }
   });
 
   it('throws in setState if the update callback is not a function', () => {
@@ -1172,4 +1133,80 @@ describe('ReactUpdates', () => {
     ReactDOM.render(<Foo />, container);
     expect(ops).toEqual(['Foo', 'Bar', 'Baz']);
   });
+
+  it('can render ridiculously large number of roots without triggering infinite update loop error', () => {
+    class Foo extends React.Component {
+      componentDidMount() {
+        const limit = 1200;
+        for (let i = 0; i < limit; i++) {
+          if (i < limit - 1) {
+            ReactDOM.render(<div />, document.createElement('div'));
+          } else {
+            ReactDOM.render(<div />, document.createElement('div'), () => {
+              // The "nested update limit" error isn't thrown until setState
+              this.setState({});
+            });
+          }
+        }
+      }
+      render() {
+        return null;
+      }
+    }
+
+    const container = document.createElement('div');
+    ReactDOM.render(<Foo />, container);
+  });
+
+  it('does not fall into an infinite update loop', () => {
+    class NonTerminating extends React.Component {
+      state = {step: 0};
+      componentDidMount() {
+        this.setState({step: 1});
+      }
+      componentWillUpdate() {
+        this.setState({step: 2});
+      }
+      render() {
+        return <div>Hello {this.props.name}{this.state.step}</div>;
+      }
+    }
+
+    const container = document.createElement('div');
+    expect(() => {
+      ReactDOM.render(<NonTerminating />, container);
+    }).toThrow('Maximum');
+  });
+
+  if (ReactDOMFeatureFlags.useFiber) {
+    it('does not fall into an infinite error loop', () => {
+      function BadRender() {
+        throw new Error('error');
+      }
+
+      class ErrorBoundary extends React.Component {
+        componentDidCatch() {
+          this.props.parent.remount();
+        }
+        render() {
+          return <BadRender />;
+        }
+      }
+
+      class NonTerminating extends React.Component {
+        state = {step: 0};
+        remount() {
+          this.setState(state => ({step: state.step + 1}));
+        }
+        render() {
+          return <ErrorBoundary key={this.state.step} parent={this} />;
+        }
+      }
+
+      const container = document.createElement('div');
+      expect(() => {
+        ReactDOM.render(<NonTerminating />, container);
+      }).toThrow('Maximum');
+    });
+  }
 });

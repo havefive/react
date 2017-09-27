@@ -1,10 +1,8 @@
 /**
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  */
@@ -20,7 +18,7 @@ declare module 'deepFreezeAndThrowOnMutationInDev' {
 declare module 'flattenStyle' { }
 declare module 'InitializeCore' { }
 declare module 'RCTEventEmitter' {
-  declare function register() : void;
+  declare function register(mixed) : void;
 }
 declare module 'TextInputState' {
   declare function blurTextInput(object : any) : void;
@@ -31,6 +29,9 @@ declare module 'ExceptionsManager' {
     error: Error,
     isFatal: boolean,
   ) : void;
+}
+declare module 'Platform' {
+  declare var OS : string;
 }
 declare module 'UIManager' {
   declare var customBubblingEventTypes : Object;
@@ -49,11 +50,19 @@ declare module 'UIManager' {
     addAtIndices : Array<number>,
     removeAtIndices : Array<number>
   ) : void;
-  declare function measure() : void;
-  declare function measureInWindow() : void;
-  declare function measureLayout() : void;
-  declare function removeRootView() : void;
-  declare function removeSubviewsFromContainerWithID() : void;
+  declare function measure(hostComponent: mixed, callback: Function) : void;
+  declare function measureInWindow(
+    nativeTag : ?number,
+    callback : Function
+  ) : void;
+  declare function measureLayout(
+    nativeTag : mixed,
+    nativeNode : number,
+    onFail : Function,
+    onSuccess : Function
+  ) : void;
+  declare function removeRootView(containerTag : number) : void;
+  declare function removeSubviewsFromContainerWithID(containerId : number) : void;
   declare function replaceExistingNonRootView() : void;
   declare function setChildren(
     containerTag : number,
@@ -75,5 +84,5 @@ declare module 'UIManager' {
   ) : Promise<any>;
 }
 declare module 'View' {
-  declare var exports : typeof ReactComponent;
+  declare var exports : typeof React$Component;
 }

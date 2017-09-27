@@ -1,17 +1,15 @@
 /**
- * Copyright 2015-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) 2015-present, Facebook, Inc.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @providesModule DOMLazyTree
  */
 
 'use strict';
 
-var DOMNamespaces = require('DOMNamespaces');
+var Namespaces = require('DOMNamespaces').Namespaces;
 var setInnerHTML = require('setInnerHTML');
 var {DOCUMENT_FRAGMENT_NODE, ELEMENT_NODE} = require('HTMLNodeType');
 var createMicrosoftUnsafeLocalFunction = require('createMicrosoftUnsafeLocalFunction');
@@ -26,7 +24,7 @@ var setTextContent = require('setTextContent');
  * In other browsers, doing so is slower or neutral compared to the other order
  * (in Firefox, twice as slow) so we only do this inversion in IE.
  *
- * See https://github.com/spicyj/innerhtml-vs-createelement-vs-clonenode.
+ * See https://github.com/sophiebits/innerhtml-vs-createelement-vs-clonenode.
  */
 var enableLazy =
   (typeof document !== 'undefined' &&
@@ -68,7 +66,7 @@ var insertTreeBefore = createMicrosoftUnsafeLocalFunction(function(
     (tree.node.nodeType === ELEMENT_NODE &&
       tree.node.nodeName.toLowerCase() === 'object' &&
       (tree.node.namespaceURI == null ||
-        tree.node.namespaceURI === DOMNamespaces.html))
+        tree.node.namespaceURI === Namespaces.html))
   ) {
     insertTreeChildren(tree);
     parentNode.insertBefore(tree.node, referenceNode);

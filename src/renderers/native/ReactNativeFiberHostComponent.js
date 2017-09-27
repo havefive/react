@@ -1,10 +1,8 @@
 /**
- * Copyright 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) 2013-present, Facebook, Inc.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @providesModule ReactNativeFiberHostComponent
  * @flow
@@ -23,12 +21,10 @@ import type {
   MeasureInWindowOnSuccessCallback,
   MeasureLayoutOnSuccessCallback,
   MeasureOnSuccessCallback,
-  NativeMethodsInterface,
-} from 'NativeMethodsMixinUtils';
-import type {Instance} from 'ReactNativeFiber';
-import type {
+  NativeMethodsMixinType,
   ReactNativeBaseComponentViewConfig,
-} from 'ReactNativeViewConfigRegistry';
+} from 'ReactNativeTypes';
+import type {Instance} from 'ReactNativeFiberRenderer';
 
 /**
  * This component defines the same methods as NativeMethodsMixin but without the
@@ -37,7 +33,7 @@ import type {
  * ReactNativeFiber depends on this component and NativeMethodsMixin depends on
  * ReactNativeFiber).
  */
-class ReactNativeFiberHostComponent implements NativeMethodsInterface {
+class ReactNativeFiberHostComponent {
   _children: Array<Instance | number>;
   _nativeTag: number;
   viewConfig: ReactNativeBaseComponentViewConfig;
@@ -90,12 +86,20 @@ class ReactNativeFiberHostComponent implements NativeMethodsInterface {
       this.viewConfig.validAttributes,
     );
 
-    UIManager.updateView(
-      this._nativeTag,
-      this.viewConfig.uiViewClassName,
-      updatePayload,
-    );
+    // Avoid the overhead of bridge calls if there's no update.
+    // This is an expensive no-op for Android, and causes an unnecessary
+    // view invalidation for certain components (eg RCTTextInput) on iOS.
+    if (updatePayload != null) {
+      UIManager.updateView(
+        this._nativeTag,
+        this.viewConfig.uiViewClassName,
+        updatePayload,
+      );
+    }
   }
 }
+
+// eslint-disable-next-line no-unused-expressions
+(ReactNativeFiberHostComponent.prototype: NativeMethodsMixinType);
 
 module.exports = ReactNativeFiberHostComponent;

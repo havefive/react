@@ -1,10 +1,8 @@
 /**
- * Copyright 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) 2013-present, Facebook, Inc.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @providesModule ReactFiberReconciler
  * @flow
@@ -14,7 +12,6 @@
 
 import type {Fiber} from 'ReactFiber';
 import type {FiberRoot} from 'ReactFiberRoot';
-import type {PriorityLevel} from 'ReactPriorityLevel';
 import type {ReactNodeList} from 'ReactTypes';
 
 var ReactFeatureFlags = require('ReactFeatureFlags');
@@ -28,6 +25,7 @@ var {
 } = require('ReactFiberContext');
 var {createFiberRoot} = require('ReactFiberRoot');
 var ReactFiberScheduler = require('ReactFiberScheduler');
+var {HostComponent} = require('ReactTypeOfWork');
 
 if (__DEV__) {
   var warning = require('fbjs/lib/warning');
@@ -36,7 +34,10 @@ if (__DEV__) {
   var getComponentName = require('getComponentName');
 }
 
-var {findCurrentHostFiber} = require('ReactFiberTreeReflection');
+var {
+  findCurrentHostFiber,
+  findCurrentHostFiberWithNoPortals,
+} = require('ReactFiberTreeReflection');
 
 var getContextForSubtree = require('getContextForSubtree');
 
@@ -49,7 +50,7 @@ type OpaqueRoot = FiberRoot;
 
 export type HostConfig<T, P, I, TI, PI, C, CX, PL> = {
   getRootHostContext(rootContainerInstance: C): CX,
-  getChildHostContext(parentHostContext: CX, type: T): CX,
+  getChildHostContext(parentHostContext: CX, type: T, instance: C): CX,
   getPublicInstance(instance: I | TI): PI,
 
   createInstance(
@@ -90,7 +91,7 @@ export type HostConfig<T, P, I, TI, PI, C, CX, PL> = {
     internalInstanceHandle: OpaqueHandle,
   ): void,
 
-  shouldSetTextContent(props: P): boolean,
+  shouldSetTextContent(type: T, props: P): boolean,
   resetTextContent(instance: I): void,
   shouldDeprioritizeSubtree(type: T, props: P): boolean,
 
@@ -102,17 +103,52 @@ export type HostConfig<T, P, I, TI, PI, C, CX, PL> = {
   ): TI,
   commitTextUpdate(textInstance: TI, oldText: string, newText: string): void,
 
-  appendChild(parentInstance: I | C, child: I | TI): void,
-  insertBefore(parentInstance: I | C, child: I | TI, beforeChild: I | TI): void,
-  removeChild(parentInstance: I | C, child: I | TI): void,
+  appendChild(parentInstance: I, child: I | TI): void,
+  appendChildToContainer(container: C, child: I | TI): void,
+  insertBefore(parentInstance: I, child: I | TI, beforeChild: I | TI): void,
+  insertInContainerBefore(
+    container: C,
+    child: I | TI,
+    beforeChild: I | TI,
+  ): void,
+  removeChild(parentInstance: I, child: I | TI): void,
+  removeChildFromContainer(container: C, child: I | TI): void,
 
-  scheduleAnimationCallback(callback: () => void): number | void,
   scheduleDeferredCallback(
     callback: (deadline: Deadline) => void,
   ): number | void,
 
   prepareForCommit(): void,
   resetAfterCommit(): void,
+
+  // Optional hydration
+  canHydrateInstance?: (instance: I | TI, type: T, props: P) => boolean,
+  canHydrateTextInstance?: (instance: I | TI, text: string) => boolean,
+  getNextHydratableSibling?: (instance: I | TI) => null | I | TI,
+  getFirstHydratableChild?: (parentInstance: I | C) => null | I | TI,
+  hydrateInstance?: (
+    instance: I,
+    type: T,
+    props: P,
+    rootContainerInstance: C,
+    hostContext: CX,
+    internalInstanceHandle: OpaqueHandle,
+  ) => null | PL,
+  hydrateTextInstance?: (
+    textInstance: TI,
+    text: string,
+    internalInstanceHandle: OpaqueHandle,
+  ) => boolean,
+  didNotHydrateInstance?: (parentInstance: I | C, instance: I | TI) => void,
+  didNotFindHydratableInstance?: (
+    parentInstance: I | C,
+    type: T,
+    props: P,
+  ) => void,
+  didNotFindHydratableTextInstance?: (
+    parentInstance: I | C,
+    text: string,
+  ) => void,
 
   useSyncScheduling?: boolean,
 };
@@ -122,22 +158,24 @@ export type Reconciler<C, I, TI> = {
   updateContainer(
     element: ReactNodeList,
     container: OpaqueRoot,
-    parentComponent: ?ReactComponent<any, any, any>,
+    parentComponent: ?React$Component<any, any>,
     callback: ?Function,
   ): void,
-  performWithPriority(priorityLevel: PriorityLevel, fn: Function): void,
   batchedUpdates<A>(fn: () => A): A,
   unbatchedUpdates<A>(fn: () => A): A,
-  syncUpdates<A>(fn: () => A): A,
+  flushSync<A>(fn: () => A): A,
   deferredUpdates<A>(fn: () => A): A,
 
   // Used to extract the return value from the initial render. Legacy API.
   getPublicRootInstance(
     container: OpaqueRoot,
-  ): ReactComponent<any, any, any> | TI | I | null,
+  ): React$Component<any, any> | TI | I | null,
 
   // Use for findDOMNode/findHostNode. Legacy API.
   findHostInstance(component: Fiber): I | TI | null,
+
+  // Used internally for filtering out portals. Legacy API.
+  findHostInstanceWithNoPortals(component: Fiber): I | TI | null,
 };
 
 getContextForSubtree._injectFiber(function(fiber: Fiber) {
@@ -150,13 +188,14 @@ getContextForSubtree._injectFiber(function(fiber: Fiber) {
 module.exports = function<T, P, I, TI, PI, C, CX, PL>(
   config: HostConfig<T, P, I, TI, PI, C, CX, PL>,
 ): Reconciler<C, I, TI> {
+  var {getPublicInstance} = config;
+
   var {
     scheduleUpdate,
     getPriorityContext,
-    performWithPriority,
     batchedUpdates,
     unbatchedUpdates,
-    syncUpdates,
+    flushSync,
     deferredUpdates,
   } = ReactFiberScheduler(config);
 
@@ -188,7 +227,8 @@ module.exports = function<T, P, I, TI, PI, C, CX, PL>(
       ReactFeatureFlags.enableAsyncSubtreeAPI &&
       element != null &&
       element.type != null &&
-      (element.type: any).unstable_asyncUpdates === true;
+      element.type.prototype != null &&
+      (element.type.prototype: any).unstable_isAsyncReactComponent === true;
     const priorityLevel = getPriorityContext(current, forceAsync);
     const nextState = {element};
     callback = callback === undefined ? null : callback;
@@ -212,7 +252,7 @@ module.exports = function<T, P, I, TI, PI, C, CX, PL>(
     updateContainer(
       element: ReactNodeList,
       container: OpaqueRoot,
-      parentComponent: ?ReactComponent<any, any, any>,
+      parentComponent: ?React$Component<any, any>,
       callback: ?Function,
     ): void {
       // TODO: If this is a nested container, this won't be the root.
@@ -240,28 +280,39 @@ module.exports = function<T, P, I, TI, PI, C, CX, PL>(
       scheduleTopLevelUpdate(current, element, callback);
     },
 
-    performWithPriority,
-
     batchedUpdates,
 
     unbatchedUpdates,
 
-    syncUpdates,
-
     deferredUpdates,
+
+    flushSync,
 
     getPublicRootInstance(
       container: OpaqueRoot,
-    ): ReactComponent<any, any, any> | I | TI | null {
+    ): React$Component<any, any> | PI | null {
       const containerFiber = container.current;
       if (!containerFiber.child) {
         return null;
       }
-      return containerFiber.child.stateNode;
+      switch (containerFiber.child.tag) {
+        case HostComponent:
+          return getPublicInstance(containerFiber.child.stateNode);
+        default:
+          return containerFiber.child.stateNode;
+      }
     },
 
-    findHostInstance(fiber: Fiber): I | TI | null {
+    findHostInstance(fiber: Fiber): PI | null {
       const hostFiber = findCurrentHostFiber(fiber);
+      if (hostFiber === null) {
+        return null;
+      }
+      return hostFiber.stateNode;
+    },
+
+    findHostInstanceWithNoPortals(fiber: Fiber): PI | null {
+      const hostFiber = findCurrentHostFiberWithNoPortals(fiber);
       if (hostFiber === null) {
         return null;
       }
