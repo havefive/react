@@ -753,9 +753,9 @@ class App extends React.Component {
 
   async componentDidMount() {
     const sources = {
-      ReactStable: 'https://unpkg.com/react@latest/dist/react.js',
-      ReactDOMStable: 'https://unpkg.com/react-dom@latest/dist/react-dom.js',
-      ReactDOMServerStable: 'https://unpkg.com/react-dom@latest/dist/react-dom-server.js',
+      ReactStable: 'https://unpkg.com/react@latest/umd/react.development.js',
+      ReactDOMStable: 'https://unpkg.com/react-dom@latest/umd/react-dom.development.js',
+      ReactDOMServerStable: 'https://unpkg.com/react-dom@latest/umd/react-dom-server.browser.development.js',
       ReactNext: '/react.development.js',
       ReactDOMNext: '/react-dom.development.js',
       ReactDOMServerNext: '/react-dom-server.browser.development.js',
@@ -958,35 +958,25 @@ class App extends React.Component {
     return (
       <div>
         <div>
-          <select onChange={this.onUpdateSort}>
-            <option
-              selected={this.state.sortOrder === ALPHABETICAL}
-              value={ALPHABETICAL}>
+          <select value={this.state.sortOrder} onChange={this.onUpdateSort}>
+            <option value={ALPHABETICAL}>
               alphabetical
             </option>
-            <option
-              selected={this.state.sortOrder === REV_ALPHABETICAL}
-              value={REV_ALPHABETICAL}>
+            <option value={REV_ALPHABETICAL}>
               reverse alphabetical
             </option>
-            <option
-              selected={this.state.sortOrder === GROUPED_BY_ROW_PATTERN}
-              value={GROUPED_BY_ROW_PATTERN}>
+            <option value={GROUPED_BY_ROW_PATTERN}>
               grouped by row pattern :)
             </option>
           </select>
-          <select onChange={this.onUpdateFilter}>
-            <option selected={this.state.sortOrder === ALL} value={ALL}>
+          <select value={this.state.filter} onChange={this.onUpdateFilter}>
+            <option value={ALL}>
               all
             </option>
-            <option
-              selected={this.state.sortOrder === INCOMPLETE}
-              value={INCOMPLETE}>
+            <option value={INCOMPLETE}>
               incomplete
             </option>
-            <option
-              selected={this.state.sortOrder === COMPLETE}
-              value={COMPLETE}>
+            <option value={COMPLETE}>
               complete
             </option>
           </select>

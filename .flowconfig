@@ -10,19 +10,13 @@
 <PROJECT_ROOT>/.*/__mocks__/.*
 <PROJECT_ROOT>/.*/__tests__/.*
 
-# Ignore Docs
-<PROJECT_ROOT>/docs/.*
-<PROJECT_ROOT>/.*/docs/.*
-
 [include]
 
 [libs]
 ./node_modules/fbjs/flow/lib/dev.js
-./flow
+./scripts/flow
 
 [options]
-module.system=haste
-
 esproposal.class_static_fields=enable
 esproposal.class_instance_fields=enable
 unsafe.enable_getters_and_setters=true
