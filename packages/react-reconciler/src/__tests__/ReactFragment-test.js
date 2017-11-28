@@ -15,9 +15,6 @@ describe('ReactFragment', () => {
   beforeEach(function() {
     jest.resetModules();
 
-    const ReactFeatureFlags = require('shared/ReactFeatureFlags');
-    ReactFeatureFlags.enableReactFragment = true;
-
     React = require('react');
     ReactNoop = require('react-noop-renderer');
   });
@@ -97,12 +94,14 @@ describe('ReactFragment', () => {
     }
 
     function Foo({condition}) {
-      return condition
-        ? <Stateful key="a" />
-        : <React.Fragment>
-            <Stateful key="a" />
-            <div key="b">World</div>
-          </React.Fragment>;
+      return condition ? (
+        <Stateful key="a" />
+      ) : (
+        <React.Fragment>
+          <Stateful key="a" />
+          <div key="b">World</div>
+        </React.Fragment>
+      );
     }
 
     ReactNoop.render(<Foo condition={true} />);
@@ -135,13 +134,15 @@ describe('ReactFragment', () => {
     }
 
     function Foo({condition}) {
-      return condition
-        ? <React.Fragment>
-            <Stateful />
-          </React.Fragment>
-        : <React.Fragment>
-            <Stateful />
-          </React.Fragment>;
+      return condition ? (
+        <React.Fragment>
+          <Stateful />
+        </React.Fragment>
+      ) : (
+        <React.Fragment>
+          <Stateful />
+        </React.Fragment>
+      );
     }
 
     ReactNoop.render(<Foo condition={true} />);
@@ -174,22 +175,24 @@ describe('ReactFragment', () => {
     }
 
     function Foo({condition}) {
-      return condition
-        ? <React.Fragment>
+      return condition ? (
+        <React.Fragment>
+          <React.Fragment>
             <React.Fragment>
-              <React.Fragment>
-                <Stateful key="a" />
-              </React.Fragment>
+              <Stateful key="a" />
             </React.Fragment>
           </React.Fragment>
-        : <React.Fragment>
+        </React.Fragment>
+      ) : (
+        <React.Fragment>
+          <React.Fragment>
             <React.Fragment>
-              <React.Fragment>
-                <div />
-                <Stateful key="a" />
-              </React.Fragment>
+              <div />
+              <Stateful key="a" />
             </React.Fragment>
-          </React.Fragment>;
+          </React.Fragment>
+        </React.Fragment>
+      );
     }
 
     ReactNoop.render(<Foo condition={true} />);
@@ -222,11 +225,17 @@ describe('ReactFragment', () => {
     }
 
     function Foo({condition}) {
-      return condition
-        ? <React.Fragment>
-            <React.Fragment><Stateful key="a" /></React.Fragment>
+      return condition ? (
+        <React.Fragment>
+          <React.Fragment>
+            <Stateful key="a" />
           </React.Fragment>
-        : <React.Fragment><Stateful key="a" /></React.Fragment>;
+        </React.Fragment>
+      ) : (
+        <React.Fragment>
+          <Stateful key="a" />
+        </React.Fragment>
+      );
     }
 
     ReactNoop.render(<Foo condition={true} />);
@@ -259,13 +268,15 @@ describe('ReactFragment', () => {
     }
 
     function Foo({condition}) {
-      return condition
-        ? <Stateful key="a" />
-        : <React.Fragment>
-            <React.Fragment>
-              <Stateful key="a" />
-            </React.Fragment>
-          </React.Fragment>;
+      return condition ? (
+        <Stateful key="a" />
+      ) : (
+        <React.Fragment>
+          <React.Fragment>
+            <Stateful key="a" />
+          </React.Fragment>
+        </React.Fragment>
+      );
     }
 
     ReactNoop.render(<Foo condition={true} />);
@@ -298,14 +309,16 @@ describe('ReactFragment', () => {
     }
 
     function Foo({condition}) {
-      return condition
-        ? <Stateful key="a" />
-        : <React.Fragment>
-            <React.Fragment>
-              <Stateful key="a" />
-            </React.Fragment>
-            <div />
-          </React.Fragment>;
+      return condition ? (
+        <Stateful key="a" />
+      ) : (
+        <React.Fragment>
+          <React.Fragment>
+            <Stateful key="a" />
+          </React.Fragment>
+          <div />
+        </React.Fragment>
+      );
     }
 
     ReactNoop.render(<Foo condition={true} />);
@@ -338,13 +351,13 @@ describe('ReactFragment', () => {
     }
 
     function Foo({condition}) {
-      return condition
-        ? <React.Fragment>
-            <Stateful key="a" />
-          </React.Fragment>
-        : <React.Fragment>
-            {[<Stateful key="a" />]}
-          </React.Fragment>;
+      return condition ? (
+        <React.Fragment>
+          <Stateful key="a" />
+        </React.Fragment>
+      ) : (
+        <React.Fragment>{[<Stateful key="a" />]}</React.Fragment>
+      );
     }
 
     ReactNoop.render(<Foo condition={true} />);
@@ -377,11 +390,13 @@ describe('ReactFragment', () => {
     }
 
     function Foo({condition}) {
-      return condition
-        ? [<Stateful key="a" />]
-        : <React.Fragment>
-            <Stateful key="a" />
-          </React.Fragment>;
+      return condition ? (
+        [<Stateful key="a" />]
+      ) : (
+        <React.Fragment>
+          <Stateful key="a" />
+        </React.Fragment>
+      );
     }
 
     ReactNoop.render(<Foo condition={true} />);
@@ -414,11 +429,15 @@ describe('ReactFragment', () => {
     }
 
     function Foo({condition}) {
-      return condition
-        ? <React.Fragment>{[<Stateful key="a" />]}</React.Fragment>
-        : <React.Fragment>
-            <React.Fragment><Stateful key="a" /></React.Fragment>
-          </React.Fragment>;
+      return condition ? (
+        <React.Fragment>{[<Stateful key="a" />]}</React.Fragment>
+      ) : (
+        <React.Fragment>
+          <React.Fragment>
+            <Stateful key="a" />
+          </React.Fragment>
+        </React.Fragment>
+      );
     }
 
     ReactNoop.render(<Foo condition={true} />);
@@ -451,9 +470,11 @@ describe('ReactFragment', () => {
     }
 
     function Foo({condition}) {
-      return condition
-        ? <React.Fragment>{[<Stateful key="a" />]}</React.Fragment>
-        : [[<Stateful key="a" />]];
+      return condition ? (
+        <React.Fragment>{[<Stateful key="a" />]}</React.Fragment>
+      ) : (
+        [[<Stateful key="a" />]]
+      );
     }
 
     ReactNoop.render(<Foo condition={true} />);
@@ -486,11 +507,15 @@ describe('ReactFragment', () => {
     }
 
     function Foo({condition}) {
-      return condition
-        ? <React.Fragment>
-            <React.Fragment><Stateful key="a" /></React.Fragment>
+      return condition ? (
+        <React.Fragment>
+          <React.Fragment>
+            <Stateful key="a" />
           </React.Fragment>
-        : [[<Stateful key="a" />]];
+        </React.Fragment>
+      ) : (
+        [[<Stateful key="a" />]]
+      );
     }
 
     ReactNoop.render(<Foo condition={true} />);
@@ -523,14 +548,16 @@ describe('ReactFragment', () => {
     }
 
     function Foo({condition}) {
-      return condition
-        ? <React.Fragment key="a">
-            <Stateful />
-          </React.Fragment>
-        : <React.Fragment key="b">
-            <Stateful />
-            <span>World</span>
-          </React.Fragment>;
+      return condition ? (
+        <React.Fragment key="a">
+          <Stateful />
+        </React.Fragment>
+      ) : (
+        <React.Fragment key="b">
+          <Stateful />
+          <span>World</span>
+        </React.Fragment>
+      );
     }
 
     ReactNoop.render(<Foo condition={true} />);
@@ -563,13 +590,15 @@ describe('ReactFragment', () => {
     }
 
     function Foo({condition}) {
-      return condition
-        ? <React.Fragment key="a">
-            <Stateful />
-          </React.Fragment>
-        : <React.Fragment>
-            <Stateful />
-          </React.Fragment>;
+      return condition ? (
+        <React.Fragment key="a">
+          <Stateful />
+        </React.Fragment>
+      ) : (
+        <React.Fragment>
+          <Stateful />
+        </React.Fragment>
+      );
     }
 
     ReactNoop.render(<Foo condition={true} />);
@@ -602,25 +631,27 @@ describe('ReactFragment', () => {
     }
 
     function Foo({condition}) {
-      return condition
-        ? <div>
-            <React.Fragment key="c">
-              <span>foo</span>
-              <div key="b">
-                <Stateful key="a" />
-              </div>
-            </React.Fragment>
-            <span>boop</span>
-          </div>
-        : <div>
-            <span>beep</span>
-            <React.Fragment key="c">
-              <div key="b">
-                <Stateful key="a" />
-              </div>
-              <span>bar</span>
-            </React.Fragment>
-          </div>;
+      return condition ? (
+        <div>
+          <React.Fragment key="c">
+            <span>foo</span>
+            <div key="b">
+              <Stateful key="a" />
+            </div>
+          </React.Fragment>
+          <span>boop</span>
+        </div>
+      ) : (
+        <div>
+          <span>beep</span>
+          <React.Fragment key="c">
+            <div key="b">
+              <Stateful key="a" />
+            </div>
+            <span>bar</span>
+          </React.Fragment>
+        </div>
+      );
     }
 
     ReactNoop.render(<Foo condition={true} />);
@@ -640,7 +671,7 @@ describe('ReactFragment', () => {
   });
 
   it('should not preserve state when switching to a keyed fragment to an array', function() {
-    spyOn(console, 'error');
+    spyOnDev(console, 'error');
     var ops = [];
 
     class Stateful extends React.Component {
@@ -654,11 +685,21 @@ describe('ReactFragment', () => {
     }
 
     function Foo({condition}) {
-      return condition
-        ? <div>
-            {<React.Fragment key="foo"><Stateful /></React.Fragment>}<span />
-          </div>
-        : <div>{[<Stateful />]}<span /></div>;
+      return condition ? (
+        <div>
+          {
+            <React.Fragment key="foo">
+              <Stateful />
+            </React.Fragment>
+          }
+          <span />
+        </div>
+      ) : (
+        <div>
+          {[<Stateful />]}
+          <span />
+        </div>
+      );
     }
 
     ReactNoop.render(<Foo condition={true} />);
@@ -675,14 +716,16 @@ describe('ReactFragment', () => {
 
     expect(ops).toEqual([]);
     expect(ReactNoop.getChildren()).toEqual([div(div(), span())]);
-    expectDev(console.error.calls.count()).toBe(1);
-    expectDev(console.error.calls.argsFor(0)[0]).toContain(
-      'Each child in an array or iterator should have a unique "key" prop.',
-    );
+    if (__DEV__) {
+      expect(console.error.calls.count()).toBe(1);
+      expect(console.error.calls.argsFor(0)[0]).toContain(
+        'Each child in an array or iterator should have a unique "key" prop.',
+      );
+    }
   });
 
   it('should preserve state when it does not change positions', function() {
-    spyOn(console, 'error');
+    spyOnDev(console, 'error');
     var ops = [];
 
     class Stateful extends React.Component {
@@ -697,8 +740,18 @@ describe('ReactFragment', () => {
 
     function Foo({condition}) {
       return condition
-        ? [<span />, <React.Fragment><Stateful /></React.Fragment>]
-        : [<span />, <React.Fragment><Stateful /></React.Fragment>];
+        ? [
+            <span />,
+            <React.Fragment>
+              <Stateful />
+            </React.Fragment>,
+          ]
+        : [
+            <span />,
+            <React.Fragment>
+              <Stateful />
+            </React.Fragment>,
+          ];
     }
 
     ReactNoop.render(<Foo condition={true} />);
@@ -715,11 +768,13 @@ describe('ReactFragment', () => {
 
     expect(ops).toEqual(['Update Stateful', 'Update Stateful']);
     expect(ReactNoop.getChildren()).toEqual([span(), div()]);
-    expectDev(console.error.calls.count()).toBe(3);
-    for (let errorIndex = 0; errorIndex < 3; ++errorIndex) {
-      expectDev(console.error.calls.argsFor(errorIndex)[0]).toContain(
-        'Each child in an array or iterator should have a unique "key" prop.',
-      );
+    if (__DEV__) {
+      expect(console.error.calls.count()).toBe(3);
+      for (let errorIndex = 0; errorIndex < 3; ++errorIndex) {
+        expect(console.error.calls.argsFor(errorIndex)[0]).toContain(
+          'Each child in an array or iterator should have a unique "key" prop.',
+        );
+      }
     }
   });
 });

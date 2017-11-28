@@ -7,35 +7,40 @@
  * @flow
  */
 
-'use strict';
-
 import type {ReactElement} from 'shared/ReactElementType';
 
-var React = require('react');
-var emptyFunction = require('fbjs/lib/emptyFunction');
-var emptyObject = require('fbjs/lib/emptyObject');
-var hyphenateStyleName = require('fbjs/lib/hyphenateStyleName');
-var invariant = require('fbjs/lib/invariant');
-var memoizeStringOnly = require('fbjs/lib/memoizeStringOnly');
+import React from 'react';
+import emptyFunction from 'fbjs/lib/emptyFunction';
+import emptyObject from 'fbjs/lib/emptyObject';
+import hyphenateStyleName from 'fbjs/lib/hyphenateStyleName';
+import invariant from 'fbjs/lib/invariant';
+import memoizeStringOnly from 'fbjs/lib/memoizeStringOnly';
+import warning from 'fbjs/lib/warning';
+import checkPropTypes from 'prop-types/checkPropTypes';
+import describeComponentFrame from 'shared/describeComponentFrame';
+import {ReactDebugCurrentFrame} from 'shared/ReactGlobalSharedState';
+import {REACT_FRAGMENT_TYPE} from 'shared/ReactSymbols';
 
-var DOMMarkupOperations = require('./DOMMarkupOperations');
-var {
+import {
+  createMarkupForCustomAttribute,
+  createMarkupForProperty,
+  createMarkupForRoot,
+} from './DOMMarkupOperations';
+import escapeTextForBrowser from './escapeTextForBrowser';
+import {
   Namespaces,
   getIntrinsicNamespace,
   getChildNamespace,
-} = require('../shared/DOMNamespaces');
-var ReactControlledValuePropTypes = require('../shared/ReactControlledValuePropTypes');
-var assertValidProps = require('../shared/assertValidProps');
-var dangerousStyleValue = require('../shared/dangerousStyleValue');
-var escapeTextContentForBrowser = require('../shared/escapeTextContentForBrowser');
-var isCustomComponent = require('../shared/isCustomComponent');
-var omittedCloseTags = require('../shared/omittedCloseTags');
-
-var REACT_FRAGMENT_TYPE =
-  (typeof Symbol === 'function' &&
-    Symbol.for &&
-    Symbol.for('react.fragment')) ||
-  0xeacb;
+} from '../shared/DOMNamespaces';
+import ReactControlledValuePropTypes from '../shared/ReactControlledValuePropTypes';
+import assertValidProps from '../shared/assertValidProps';
+import dangerousStyleValue from '../shared/dangerousStyleValue';
+import isCustomComponent from '../shared/isCustomComponent';
+import omittedCloseTags from '../shared/omittedCloseTags';
+import warnValidStyle from '../shared/warnValidStyle';
+import {validateProperties as validateARIAProperties} from '../shared/ReactDOMInvalidARIAHook';
+import {validateProperties as validateInputProperties} from '../shared/ReactDOMNullInputValuePropHook';
+import {validateProperties as validateUnknownProperties} from '../shared/ReactDOMUnknownPropertyHook';
 
 // Based on reading the React.Children implementation. TODO: type this somewhere?
 type ReactNode = string | number | ReactElement;
@@ -46,27 +51,12 @@ var toArray = ((React.Children.toArray: any): toArrayType);
 var getStackAddendum = emptyFunction.thatReturns('');
 
 if (__DEV__) {
-  var warning = require('fbjs/lib/warning');
-  var checkPropTypes = require('prop-types/checkPropTypes');
-
-  var warnValidStyle = require('../shared/warnValidStyle');
-  var {
-    validateProperties: validateARIAProperties,
-  } = require('../shared/ReactDOMInvalidARIAHook');
-  var {
-    validateProperties: validateInputProperties,
-  } = require('../shared/ReactDOMNullInputValuePropHook');
-  var {
-    validateProperties: validateUnknownProperties,
-  } = require('../shared/ReactDOMUnknownPropertyHook');
-
   var validatePropertiesInDevelopment = function(type, props) {
     validateARIAProperties(type, props);
     validateInputProperties(type, props);
-    validateUnknownProperties(type, props);
+    validateUnknownProperties(type, props, /* canUseEventSystem */ false);
   };
 
-  var describeComponentFrame = require('shared/describeComponentFrame');
   var describeStackFrame = function(element): string {
     var source = element._source;
     var type = element.type;
@@ -75,7 +65,6 @@ if (__DEV__) {
     return describeComponentFrame(name, source, ownerName);
   };
 
-  var {ReactDebugCurrentFrame} = require('shared/ReactGlobalSharedState');
   var currentDebugStack = null;
   var currentDebugElementStack = null;
   var setCurrentDebugStack = function(stack: Array<Frame>) {
@@ -215,7 +204,7 @@ function getNonChildrenInnerMarkup(props) {
   } else {
     var content = props.children;
     if (typeof content === 'string' || typeof content === 'number') {
-      return escapeTextContentForBrowser(content);
+      return escapeTextForBrowser(content);
     }
   }
   return null;
@@ -322,13 +311,10 @@ function createOpenTagMarkup(
     var markup = null;
     if (isCustomComponent(tagLowercase, props)) {
       if (!RESERVED_PROPS.hasOwnProperty(propKey)) {
-        markup = DOMMarkupOperations.createMarkupForCustomAttribute(
-          propKey,
-          propValue,
-        );
+        markup = createMarkupForCustomAttribute(propKey, propValue);
       }
     } else {
-      markup = DOMMarkupOperations.createMarkupForProperty(propKey, propValue);
+      markup = createMarkupForProperty(propKey, propValue);
     }
     if (markup) {
       ret += ' ' + markup;
@@ -342,7 +328,7 @@ function createOpenTagMarkup(
   }
 
   if (isRootElement) {
-    ret += ' ' + DOMMarkupOperations.createMarkupForRoot();
+    ret += ' ' + createMarkupForRoot();
   }
   return ret;
 }
@@ -437,9 +423,10 @@ function resolve(
           var dontMutate = true;
           for (var i = oldReplace ? 1 : 0; i < oldQueue.length; i++) {
             var partial = oldQueue[i];
-            var partialState = typeof partial === 'function'
-              ? partial.call(inst, nextState, element.props, publicContext)
-              : partial;
+            var partialState =
+              typeof partial === 'function'
+                ? partial.call(inst, nextState, element.props, publicContext)
+                : partial;
             if (partialState) {
               if (dontMutate) {
                 dontMutate = false;
@@ -469,19 +456,22 @@ function resolve(
     var childContext;
     if (typeof inst.getChildContext === 'function') {
       var childContextTypes = Component.childContextTypes;
-      invariant(
-        typeof childContextTypes === 'object',
-        '%s.getChildContext(): childContextTypes must be defined in order to ' +
-          'use getChildContext().',
-        getComponentName(Component) || 'Unknown',
-      );
-      childContext = inst.getChildContext();
-      for (let contextKey in childContext) {
-        invariant(
-          contextKey in childContextTypes,
-          '%s.getChildContext(): key "%s" is not defined in childContextTypes.',
+      if (typeof childContextTypes === 'object') {
+        childContext = inst.getChildContext();
+        for (let contextKey in childContext) {
+          invariant(
+            contextKey in childContextTypes,
+            '%s.getChildContext(): key "%s" is not defined in childContextTypes.',
+            getComponentName(Component) || 'Unknown',
+            contextKey,
+          );
+        }
+      } else {
+        warning(
+          false,
+          '%s.getChildContext(): childContextTypes must be defined in order to ' +
+            'use getChildContext().',
           getComponentName(Component) || 'Unknown',
-          contextKey,
         );
       }
     }
@@ -582,13 +572,13 @@ class ReactDOMServerRenderer {
         return '';
       }
       if (this.makeStaticMarkup) {
-        return escapeTextContentForBrowser(text);
+        return escapeTextForBrowser(text);
       }
       if (this.previousWasTextNode) {
-        return '<!-- -->' + escapeTextContentForBrowser(text);
+        return '<!-- -->' + escapeTextForBrowser(text);
       }
       this.previousWasTextNode = true;
-      return escapeTextContentForBrowser(text);
+      return escapeTextForBrowser(text);
     } else {
       var nextChild;
       ({child: nextChild, context} = resolve(child, context));
@@ -830,9 +820,8 @@ class ReactDOMServerRenderer {
           didWarnDefaultSelectValue = true;
         }
       }
-      this.currentSelectValue = props.value != null
-        ? props.value
-        : props.defaultValue;
+      this.currentSelectValue =
+        props.value != null ? props.value : props.defaultValue;
       props = Object.assign({}, props, {
         value: undefined,
       });
@@ -933,4 +922,4 @@ class ReactDOMServerRenderer {
   }
 }
 
-module.exports = ReactDOMServerRenderer;
+export default ReactDOMServerRenderer;

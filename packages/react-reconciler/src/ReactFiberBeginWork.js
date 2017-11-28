@@ -7,8 +7,6 @@
  * @flow
  */
 
-'use strict';
-
 import type {HostConfig} from 'react-reconciler';
 import type {ReactCall} from 'shared/ReactTypes';
 import type {Fiber} from 'react-reconciler/src/ReactFiber';
@@ -17,7 +15,7 @@ import type {HydrationContext} from './ReactFiberHydrationContext';
 import type {FiberRoot} from './ReactFiberRoot';
 import type {ExpirationTime} from './ReactFiberExpirationTime';
 
-var {
+import {
   IndeterminateComponent,
   FunctionalComponent,
   ClassComponent,
@@ -29,47 +27,45 @@ var {
   CallHandlerPhase,
   ReturnComponent,
   Fragment,
-} = require('shared/ReactTypeOfWork');
-var {
+} from 'shared/ReactTypeOfWork';
+import {
   PerformedWork,
   Placement,
   ContentReset,
   Err,
   Ref,
-} = require('shared/ReactTypeOfSideEffect');
-var {ReactCurrentOwner} = require('shared/ReactGlobalSharedState');
-var invariant = require('fbjs/lib/invariant');
-var getComponentName = require('shared/getComponentName');
+} from 'shared/ReactTypeOfSideEffect';
+import {ReactCurrentOwner} from 'shared/ReactGlobalSharedState';
+import {debugRenderPhaseSideEffects} from 'shared/ReactFeatureFlags';
+import invariant from 'fbjs/lib/invariant';
+import getComponentName from 'shared/getComponentName';
+import warning from 'fbjs/lib/warning';
+import ReactDebugCurrentFiber from './ReactDebugCurrentFiber';
+import {cancelWorkTimer} from './ReactDebugFiberPerf';
 
-var ReactFiberClassComponent = require('./ReactFiberClassComponent');
-var {
-  mountChildFibersInPlace,
+import ReactFiberClassComponent from './ReactFiberClassComponent';
+import {
+  mountChildFibers,
   reconcileChildFibers,
-  reconcileChildFibersInPlace,
   cloneChildFibers,
-} = require('./ReactChildFiber');
-var {processUpdateQueue} = require('./ReactFiberUpdateQueue');
-var {
+} from './ReactChildFiber';
+import {processUpdateQueue} from './ReactFiberUpdateQueue';
+import {
   getMaskedContext,
   getUnmaskedContext,
   hasContextChanged,
   pushContextProvider,
   pushTopLevelContextObject,
   invalidateContextProvider,
-} = require('./ReactFiberContext');
-var {NoWork, Never} = require('./ReactFiberExpirationTime');
+} from './ReactFiberContext';
+import {NoWork, Never} from './ReactFiberExpirationTime';
 
 if (__DEV__) {
-  var warning = require('fbjs/lib/warning');
-
-  var ReactDebugCurrentFiber = require('./ReactDebugCurrentFiber');
-  var {cancelWorkTimer} = require('./ReactDebugFiberPerf');
-
   var warnedAboutStatelessRefs = {};
 }
 
-module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
-  config: HostConfig<T, P, I, TI, PI, C, CC, CX, PL>,
+export default function<T, P, I, TI, HI, PI, C, CC, CX, PL>(
+  config: HostConfig<T, P, I, TI, HI, PI, C, CC, CX, PL>,
   hostContext: HostContext<C, CX>,
   hydrationContext: HydrationContext<C, CX>,
   scheduleWork: (fiber: Fiber, expirationTime: ExpirationTime) => void,
@@ -123,13 +119,13 @@ module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
       // won't update its child set by applying minimal side-effects. Instead,
       // we will add them all to the child before it gets rendered. That means
       // we can optimize this reconciliation pass by not tracking side-effects.
-      workInProgress.child = mountChildFibersInPlace(
+      workInProgress.child = mountChildFibers(
         workInProgress,
-        workInProgress.child,
+        null,
         nextChildren,
         renderExpirationTime,
       );
-    } else if (current.child === workInProgress.child) {
+    } else {
       // If the current child is the same as the work in progress, it means that
       // we haven't yet started any work on these children. Therefore, we use
       // the clone algorithm to create a copy of all the current children.
@@ -138,17 +134,7 @@ module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
       // let's throw it out.
       workInProgress.child = reconcileChildFibers(
         workInProgress,
-        workInProgress.child,
-        nextChildren,
-        renderExpirationTime,
-      );
-    } else {
-      // If, on the other hand, it is already using a clone, that means we've
-      // already begun some work on this tree and we can continue where we left
-      // off by reconciling against the existing children.
-      workInProgress.child = reconcileChildFibersInPlace(
-        workInProgress,
-        workInProgress.child,
+        current.child,
         nextChildren,
         renderExpirationTime,
       );
@@ -284,8 +270,14 @@ module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
     if (__DEV__) {
       ReactDebugCurrentFiber.setCurrentPhase('render');
       nextChildren = instance.render();
+      if (debugRenderPhaseSideEffects) {
+        instance.render();
+      }
       ReactDebugCurrentFiber.setCurrentPhase(null);
     } else {
+      if (debugRenderPhaseSideEffects) {
+        instance.render();
+      }
       nextChildren = instance.render();
     }
     // React DevTools reads this flag.
@@ -359,9 +351,9 @@ module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
         // Ensure that children mount into this root without tracking
         // side-effects. This ensures that we don't store Placement effects on
         // nodes that will be hydrated.
-        workInProgress.child = mountChildFibersInPlace(
+        workInProgress.child = mountChildFibers(
           workInProgress,
-          workInProgress.child,
+          null,
           element,
           renderExpirationTime,
         );
@@ -573,21 +565,14 @@ module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
     // The following is a fork of reconcileChildrenAtExpirationTime but using
     // stateNode to store the child.
     if (current === null) {
-      workInProgress.stateNode = mountChildFibersInPlace(
-        workInProgress,
-        workInProgress.stateNode,
-        nextChildren,
-        renderExpirationTime,
-      );
-    } else if (current.child === workInProgress.child) {
-      workInProgress.stateNode = reconcileChildFibers(
+      workInProgress.stateNode = mountChildFibers(
         workInProgress,
         workInProgress.stateNode,
         nextChildren,
         renderExpirationTime,
       );
     } else {
-      workInProgress.stateNode = reconcileChildFibersInPlace(
+      workInProgress.stateNode = reconcileChildFibers(
         workInProgress,
         workInProgress.stateNode,
         nextChildren,
@@ -632,9 +617,9 @@ module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
       // flow doesn't do during mount. This doesn't happen at the root because
       // the root always starts with a "current" with a null child.
       // TODO: Consider unifying this with how the root works.
-      workInProgress.child = reconcileChildFibersInPlace(
+      workInProgress.child = reconcileChildFibers(
         workInProgress,
-        workInProgress.child,
+        null,
         nextChildren,
         renderExpirationTime,
       );
@@ -669,9 +654,7 @@ module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
     current,
     workInProgress: Fiber,
   ): Fiber | null {
-    if (__DEV__) {
-      cancelWorkTimer(workInProgress);
-    }
+    cancelWorkTimer(workInProgress);
 
     // TODO: We should ideally be able to bail out early if the children have no
     // more work to do. However, since we don't have a separation of this
@@ -692,9 +675,7 @@ module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
   }
 
   function bailoutOnLowPriority(current, workInProgress) {
-    if (__DEV__) {
-      cancelWorkTimer(workInProgress);
-    }
+    cancelWorkTimer(workInProgress);
 
     // TODO: Handle HostComponent tags here as well and call pushHostContext()?
     // See PR 8590 discussion for context
@@ -865,4 +846,4 @@ module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
     beginWork,
     beginFailedWork,
   };
-};
+}

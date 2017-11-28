@@ -8,8 +8,6 @@
  * @flow
  */
 
-'use strict';
-
 import type {Fiber} from 'react-reconciler/src/ReactFiber';
 
 export type DispatchConfig = {
@@ -29,4 +27,5 @@ export type ReactSyntheticEvent = {
     nativeTarget: Event,
     nativeEventTarget: EventTarget,
   ) => ReactSyntheticEvent,
+  isPersistent: () => boolean,
 } & SyntheticEvent<>;

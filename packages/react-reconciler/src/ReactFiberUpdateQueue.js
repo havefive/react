@@ -7,19 +7,18 @@
  * @flow
  */
 
-'use strict';
-
 import type {Fiber} from './ReactFiber';
 import type {ExpirationTime} from './ReactFiberExpirationTime';
 
-const {Callback: CallbackEffect} = require('shared/ReactTypeOfSideEffect');
-const {ClassComponent, HostRoot} = require('shared/ReactTypeOfWork');
-const invariant = require('fbjs/lib/invariant');
+import {debugRenderPhaseSideEffects} from 'shared/ReactFeatureFlags';
+import {Callback as CallbackEffect} from 'shared/ReactTypeOfSideEffect';
+import {ClassComponent, HostRoot} from 'shared/ReactTypeOfWork';
+import invariant from 'fbjs/lib/invariant';
+import warning from 'fbjs/lib/warning';
 
-const {NoWork} = require('./ReactFiberExpirationTime');
+import {NoWork} from './ReactFiberExpirationTime';
 
 if (__DEV__) {
-  var warning = require('fbjs/lib/warning');
   var didWarnUpdateInsideUpdate = false;
 }
 
@@ -84,7 +83,7 @@ function createUpdateQueue<State>(baseState: State): UpdateQueue<State> {
   return queue;
 }
 
-function insertUpdateIntoQueue<State>(
+export function insertUpdateIntoQueue<State>(
   queue: UpdateQueue<State>,
   update: Update<State>,
 ): void {
@@ -103,9 +102,8 @@ function insertUpdateIntoQueue<State>(
     queue.expirationTime = update.expirationTime;
   }
 }
-exports.insertUpdateIntoQueue = insertUpdateIntoQueue;
 
-function insertUpdateIntoFiber<State>(
+export function insertUpdateIntoFiber<State>(
   fiber: Fiber,
   update: Update<State>,
 ): void {
@@ -117,14 +115,14 @@ function insertUpdateIntoFiber<State>(
     // It depends on which fiber is the next current. Initialize with an empty
     // base state, then set to the memoizedState when rendering. Not super
     // happy with this approach.
-    queue1 = fiber.updateQueue = createUpdateQueue(null);
+    queue1 = fiber.updateQueue = createUpdateQueue((null: any));
   }
 
   let queue2;
   if (alternateFiber !== null) {
     queue2 = alternateFiber.updateQueue;
     if (queue2 === null) {
-      queue2 = alternateFiber.updateQueue = createUpdateQueue(null);
+      queue2 = alternateFiber.updateQueue = createUpdateQueue((null: any));
     }
   } else {
     queue2 = null;
@@ -168,9 +166,8 @@ function insertUpdateIntoFiber<State>(
   // But we still need to update the `last` pointer of queue2.
   queue2.last = update;
 }
-exports.insertUpdateIntoFiber = insertUpdateIntoFiber;
 
-function getUpdateExpirationTime(fiber: Fiber): ExpirationTime {
+export function getUpdateExpirationTime(fiber: Fiber): ExpirationTime {
   if (fiber.tag !== ClassComponent && fiber.tag !== HostRoot) {
     return NoWork;
   }
@@ -180,19 +177,24 @@ function getUpdateExpirationTime(fiber: Fiber): ExpirationTime {
   }
   return updateQueue.expirationTime;
 }
-exports.getUpdateExpirationTime = getUpdateExpirationTime;
 
 function getStateFromUpdate(update, instance, prevState, props) {
   const partialState = update.partialState;
   if (typeof partialState === 'function') {
     const updateFn = partialState;
+
+    // Invoke setState callback an extra time to help detect side-effects.
+    if (debugRenderPhaseSideEffects) {
+      updateFn.call(instance, prevState, props);
+    }
+
     return updateFn.call(instance, prevState, props);
   } else {
     return partialState;
   }
 }
 
-function processUpdateQueue<State>(
+export function processUpdateQueue<State>(
   current: Fiber | null,
   workInProgress: Fiber,
   queue: UpdateQueue<State>,
@@ -322,9 +324,11 @@ function processUpdateQueue<State>(
 
   return state;
 }
-exports.processUpdateQueue = processUpdateQueue;
 
-function commitCallbacks<State>(queue: UpdateQueue<State>, context: any) {
+export function commitCallbacks<State>(
+  queue: UpdateQueue<State>,
+  context: any,
+) {
   const callbackList = queue.callbackList;
   if (callbackList === null) {
     return;
@@ -346,4 +350,3 @@ function commitCallbacks<State>(queue: UpdateQueue<State>, context: any) {
     callback.call(context);
   }
 }
-exports.commitCallbacks = commitCallbacks;

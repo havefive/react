@@ -7,8 +7,6 @@
  * @flow
  */
 
-'use strict';
-
 import type {Fiber} from 'react-reconciler/src/ReactFiber';
 import type {
   DispatchConfig,
@@ -28,6 +26,6 @@ export type PluginModule<NativeEvent> = {
     targetInst: Fiber,
     nativeTarget: NativeEvent,
     nativeEventTarget: EventTarget,
-  ) => null | ReactSyntheticEvent,
+  ) => ?ReactSyntheticEvent,
   tapMoveThreshold?: number,
 };

@@ -7,25 +7,16 @@
  * @flow
  */
 
-'use strict';
-
 import type {HostConfig, Deadline} from 'react-reconciler';
 import type {Fiber} from './ReactFiber';
 import type {FiberRoot} from './ReactFiberRoot';
 import type {HydrationContext} from './ReactFiberHydrationContext';
 import type {ExpirationTime} from './ReactFiberExpirationTime';
 
-var {
-  getStackAddendumByWorkInProgressFiber,
-} = require('shared/ReactFiberComponentTreeHook');
-var {
-  invokeGuardedCallback,
-  hasCaughtError,
-  clearCaughtError,
-} = require('shared/ReactErrorUtils');
-var {ReactCurrentOwner} = require('shared/ReactGlobalSharedState');
-var getComponentName = require('shared/getComponentName');
-var {
+import {getStackAddendumByWorkInProgressFiber} from 'shared/ReactFiberComponentTreeHook';
+import ReactErrorUtils from 'shared/ReactErrorUtils';
+import {ReactCurrentOwner} from 'shared/ReactGlobalSharedState';
+import {
   PerformedWork,
   Placement,
   Update,
@@ -35,35 +26,60 @@ var {
   Callback,
   Err,
   Ref,
-} = require('shared/ReactTypeOfSideEffect');
-var {
+} from 'shared/ReactTypeOfSideEffect';
+import {
   HostRoot,
   HostComponent,
   HostPortal,
   ClassComponent,
-} = require('shared/ReactTypeOfWork');
-var invariant = require('fbjs/lib/invariant');
+} from 'shared/ReactTypeOfWork';
+import {enableUserTimingAPI} from 'shared/ReactFeatureFlags';
+import getComponentName from 'shared/getComponentName';
+import invariant from 'fbjs/lib/invariant';
+import warning from 'fbjs/lib/warning';
 
-var ReactFiberBeginWork = require('./ReactFiberBeginWork');
-var ReactFiberCompleteWork = require('./ReactFiberCompleteWork');
-var ReactFiberCommitWork = require('./ReactFiberCommitWork');
-var ReactFiberHostContext = require('./ReactFiberHostContext');
-var ReactFiberHydrationContext = require('./ReactFiberHydrationContext');
-var {popContextProvider} = require('./ReactFiberContext');
-const {reset} = require('./ReactFiberStack');
-var {logCapturedError} = require('./ReactFiberErrorLogger');
-var {createWorkInProgress} = require('./ReactFiber');
-var {onCommitRoot} = require('./ReactFiberDevToolsHook');
-var {
+import ReactFiberBeginWork from './ReactFiberBeginWork';
+import ReactFiberCompleteWork from './ReactFiberCompleteWork';
+import ReactFiberCommitWork from './ReactFiberCommitWork';
+import ReactFiberHostContext from './ReactFiberHostContext';
+import ReactFiberHydrationContext from './ReactFiberHydrationContext';
+import ReactFiberInstrumentation from './ReactFiberInstrumentation';
+import ReactDebugCurrentFiber from './ReactDebugCurrentFiber';
+import {
+  recordEffect,
+  recordScheduleUpdate,
+  startRequestCallbackTimer,
+  stopRequestCallbackTimer,
+  startWorkTimer,
+  stopWorkTimer,
+  stopFailedWorkTimer,
+  startWorkLoopTimer,
+  stopWorkLoopTimer,
+  startCommitTimer,
+  stopCommitTimer,
+  startCommitHostEffectsTimer,
+  stopCommitHostEffectsTimer,
+  startCommitLifeCyclesTimer,
+  stopCommitLifeCyclesTimer,
+} from './ReactDebugFiberPerf';
+import {popContextProvider} from './ReactFiberContext';
+import {reset} from './ReactFiberStack';
+import {logCapturedError} from './ReactFiberErrorLogger';
+import {createWorkInProgress} from './ReactFiber';
+import {onCommitRoot} from './ReactFiberDevToolsHook';
+import {
   NoWork,
   Sync,
   Never,
   msToExpirationTime,
+  expirationTimeToMs,
   computeExpirationBucket,
-} = require('./ReactFiberExpirationTime');
-var {AsyncUpdates} = require('./ReactTypeOfInternalContext');
-var {getUpdateExpirationTime} = require('./ReactFiberUpdateQueue');
-var {resetContext} = require('./ReactFiberContext');
+} from './ReactFiberExpirationTime';
+import {AsyncUpdates} from './ReactTypeOfInternalContext';
+import {getUpdateExpirationTime} from './ReactFiberUpdateQueue';
+import {resetContext} from './ReactFiberContext';
+
+var {invokeGuardedCallback, hasCaughtError, clearCaughtError} = ReactErrorUtils;
 
 export type CapturedError = {
   componentName: ?string,
@@ -80,26 +96,6 @@ export type HandleErrorInfo = {
 };
 
 if (__DEV__) {
-  var warning = require('fbjs/lib/warning');
-
-  var ReactFiberInstrumentation = require('./ReactFiberInstrumentation');
-  var ReactDebugCurrentFiber = require('./ReactDebugCurrentFiber');
-  var {
-    recordEffect,
-    recordScheduleUpdate,
-    startWorkTimer,
-    stopWorkTimer,
-    stopFailedWorkTimer,
-    startWorkLoopTimer,
-    stopWorkLoopTimer,
-    startCommitTimer,
-    stopCommitTimer,
-    startCommitHostEffectsTimer,
-    stopCommitHostEffectsTimer,
-    startCommitLifeCyclesTimer,
-    stopCommitLifeCyclesTimer,
-  } = require('./ReactDebugFiberPerf');
-
   var didWarnAboutStateTransition = false;
   var didWarnSetStateChildContext = false;
   var didWarnStateUpdateForUnmountedComponent = {};
@@ -149,8 +145,8 @@ if (__DEV__) {
   };
 }
 
-module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
-  config: HostConfig<T, P, I, TI, PI, C, CC, CX, PL>,
+export default function<T, P, I, TI, HI, PI, C, CC, CX, PL>(
+  config: HostConfig<T, P, I, TI, HI, PI, C, CC, CX, PL>,
 ) {
   const hostContext = ReactFiberHostContext(config);
   const hydrationContext: HydrationContext<C, CX> = ReactFiberHydrationContext(
@@ -181,6 +177,7 @@ module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
   const {
     now,
     scheduleDeferredCallback,
+    cancelDeferredCallback,
     useSyncScheduling,
     prepareForCommit,
     resetAfterCommit,
@@ -222,6 +219,9 @@ module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
   let isCommitting: boolean = false;
   let isUnmounting: boolean = false;
 
+  // Used for performance tracking.
+  let interruptedBy: Fiber | null = null;
+
   function resetContextStack() {
     // Reset the stack
     reset();
@@ -234,8 +234,8 @@ module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
     while (nextEffect !== null) {
       if (__DEV__) {
         ReactDebugCurrentFiber.setCurrentFiber(nextEffect);
-        recordEffect();
       }
+      recordEffect();
 
       const effectTag = nextEffect.effectTag;
       if (effectTag & ContentReset) {
@@ -303,24 +303,18 @@ module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
       const effectTag = nextEffect.effectTag;
 
       if (effectTag & (Update | Callback)) {
-        if (__DEV__) {
-          recordEffect();
-        }
+        recordEffect();
         const current = nextEffect.alternate;
         commitLifeCycles(current, nextEffect);
       }
 
       if (effectTag & Ref) {
-        if (__DEV__) {
-          recordEffect();
-        }
+        recordEffect();
         commitAttachRef(nextEffect);
       }
 
       if (effectTag & Err) {
-        if (__DEV__) {
-          recordEffect();
-        }
+        recordEffect();
         commitErrorHandling(nextEffect);
       }
 
@@ -343,9 +337,7 @@ module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
     // captured elsewhere, to prevent the unmount from being interrupted.
     isWorking = true;
     isCommitting = true;
-    if (__DEV__) {
-      startCommitTimer();
-    }
+    startCommitTimer();
 
     const root: FiberRoot = finishedWork.stateNode;
     invariant(
@@ -382,9 +374,7 @@ module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
     // The first pass performs all the host insertions, updates, deletions and
     // ref unmounts.
     nextEffect = firstEffect;
-    if (__DEV__) {
-      startCommitHostEffectsTimer();
-    }
+    startCommitHostEffectsTimer();
     while (nextEffect !== null) {
       let didError = false;
       let error;
@@ -415,9 +405,7 @@ module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
         }
       }
     }
-    if (__DEV__) {
-      stopCommitHostEffectsTimer();
-    }
+    stopCommitHostEffectsTimer();
 
     resetAfterCommit();
 
@@ -432,9 +420,7 @@ module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
     // and deletions in the entire tree have already been invoked.
     // This pass also triggers any renderer-specific initial effects.
     nextEffect = firstEffect;
-    if (__DEV__) {
-      startCommitLifeCyclesTimer();
-    }
+    startCommitLifeCyclesTimer();
     while (nextEffect !== null) {
       let didError = false;
       let error;
@@ -467,10 +453,8 @@ module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
 
     isCommitting = false;
     isWorking = false;
-    if (__DEV__) {
-      stopCommitLifeCyclesTimer();
-      stopCommitTimer();
-    }
+    stopCommitLifeCyclesTimer();
+    stopCommitTimer();
     if (typeof onCommitRoot === 'function') {
       onCommitRoot(finishedWork.stateNode);
     }
@@ -556,9 +540,7 @@ module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
       resetExpirationTime(workInProgress, nextRenderExpirationTime);
 
       if (next !== null) {
-        if (__DEV__) {
-          stopWorkTimer(workInProgress);
-        }
+        stopWorkTimer(workInProgress);
         if (__DEV__ && ReactFiberInstrumentation.debugTool) {
           ReactFiberInstrumentation.debugTool.onCompleteWork(workInProgress);
         }
@@ -600,9 +582,7 @@ module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
         }
       }
 
-      if (__DEV__) {
-        stopWorkTimer(workInProgress);
-      }
+      stopWorkTimer(workInProgress);
       if (__DEV__ && ReactFiberInstrumentation.debugTool) {
         ReactFiberInstrumentation.debugTool.onCompleteWork(workInProgress);
       }
@@ -636,10 +616,11 @@ module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
     const current = workInProgress.alternate;
 
     // See if beginning this work spawns more work.
+    startWorkTimer(workInProgress);
     if (__DEV__) {
-      startWorkTimer(workInProgress);
       ReactDebugCurrentFiber.setCurrentFiber(workInProgress);
     }
+
     let next = beginWork(current, workInProgress, nextRenderExpirationTime);
     if (__DEV__) {
       ReactDebugCurrentFiber.resetCurrentFiber();
@@ -666,8 +647,8 @@ module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
     const current = workInProgress.alternate;
 
     // See if beginning this work spawns more work.
+    startWorkTimer(workInProgress);
     if (__DEV__) {
-      startWorkTimer(workInProgress);
       ReactDebugCurrentFiber.setCurrentFiber(workInProgress);
     }
     let next = beginFailedWork(
@@ -778,10 +759,6 @@ module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
     root: FiberRoot,
     expirationTime: ExpirationTime,
   ): Fiber | null {
-    if (__DEV__) {
-      startWorkLoopTimer();
-    }
-
     invariant(
       !isWorking,
       'renderRoot was called recursively. This error is likely caused ' +
@@ -800,7 +777,7 @@ module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
       expirationTime !== nextRenderExpirationTime ||
       nextUnitOfWork === null
     ) {
-      // This is a restart. Reset the stack.
+      // Reset the stack and start working from the root.
       resetContextStack();
       nextRoot = root;
       nextRenderExpirationTime = expirationTime;
@@ -810,6 +787,8 @@ module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
         expirationTime,
       );
     }
+
+    startWorkLoopTimer(nextUnitOfWork);
 
     let didError = false;
     let error = null;
@@ -893,13 +872,11 @@ module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
     const uncaughtError = firstUncaughtError;
 
     // We're done performing work. Time to clean up.
+    stopWorkLoopTimer(interruptedBy);
+    interruptedBy = null;
     isWorking = false;
     didFatal = false;
     firstUncaughtError = null;
-
-    if (__DEV__) {
-      stopWorkLoopTimer();
-    }
 
     if (uncaughtError !== null) {
       onUncaughtError(uncaughtError);
@@ -1027,7 +1004,10 @@ module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
       } catch (e) {
         // Prevent cycle if logCapturedError() throws.
         // A cycle may still occur if logCapturedError renders a component that throws.
-        console.error(e);
+        const suppressLogging = e && e.suppressReactErrorLogging;
+        if (!suppressLogging) {
+          console.error(e);
+        }
       }
 
       // If we're in the commit phase, defer scheduling an update on the
@@ -1136,11 +1116,9 @@ module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
           break;
       }
       if (node === to || node.alternate === to) {
-        if (__DEV__) {
-          stopFailedWorkTimer(node);
-        }
+        stopFailedWorkTimer(node);
         break;
-      } else if (__DEV__) {
+      } else {
         stopWorkTimer(node);
       }
       node = node.return;
@@ -1195,9 +1173,7 @@ module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
     expirationTime: ExpirationTime,
     isErrorRecovery: boolean,
   ) {
-    if (__DEV__) {
-      recordScheduleUpdate();
-    }
+    recordScheduleUpdate();
 
     if (__DEV__) {
       if (!isErrorRecovery && fiber.tag === ClassComponent) {
@@ -1230,9 +1206,13 @@ module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
           if (
             !isWorking &&
             root === nextRoot &&
-            expirationTime <= nextRenderExpirationTime
+            expirationTime < nextRenderExpirationTime
           ) {
-            // This is an interruption. Restart the root from the top.
+            // Restart the root from the top.
+            if (nextUnitOfWork !== null) {
+              // This is an interruption. (Used for performance tracking.)
+              interruptedBy = fiber;
+            }
             nextRoot = null;
             nextUnitOfWork = null;
             nextRenderExpirationTime = NoWork;
@@ -1289,7 +1269,8 @@ module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
   let firstScheduledRoot: FiberRoot | null = null;
   let lastScheduledRoot: FiberRoot | null = null;
 
-  let isCallbackScheduled: boolean = false;
+  let callbackExpirationTime: ExpirationTime = NoWork;
+  let callbackID: number = -1;
   let isRendering: boolean = false;
   let nextFlushedRoot: FiberRoot | null = null;
   let nextFlushedExpirationTime: ExpirationTime = NoWork;
@@ -1306,6 +1287,31 @@ module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
   let nestedUpdateCount: number = 0;
 
   const timeHeuristicForUnitOfWork = 1;
+
+  function scheduleCallbackWithExpiration(expirationTime) {
+    if (callbackExpirationTime !== NoWork) {
+      // A callback is already scheduled. Check its expiration time (timeout).
+      if (expirationTime > callbackExpirationTime) {
+        // Existing callback has sufficient timeout. Exit.
+        return;
+      } else {
+        // Existing callback has insufficient timeout. Cancel and schedule a
+        // new one.
+        cancelDeferredCallback(callbackID);
+      }
+      // The request callback timer is already running. Don't start a new one.
+    } else {
+      startRequestCallbackTimer();
+    }
+
+    // Compute a timeout for the given expiration time.
+    const currentMs = now() - startTime;
+    const expirationMs = expirationTimeToMs(expirationTime);
+    const timeout = expirationMs - currentMs;
+
+    callbackExpirationTime = expirationTime;
+    callbackID = scheduleDeferredCallback(performAsyncWork, {timeout});
+  }
 
   // requestWork is called by the scheduler whenever a root receives an update.
   // It's up to the renderer to call renderRoot at some point in the future.
@@ -1356,7 +1362,9 @@ module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
       if (isUnbatchingUpdates) {
         // ...unless we're inside unbatchedUpdates, in which case we should
         // flush it now.
-        performWorkOnRoot(root, Sync);
+        nextFlushedRoot = root;
+        nextFlushedExpirationTime = Sync;
+        performWorkOnRoot(nextFlushedRoot, nextFlushedExpirationTime);
       }
       return;
     }
@@ -1364,9 +1372,8 @@ module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
     // TODO: Get rid of Sync and use current time?
     if (expirationTime === Sync) {
       performWork(Sync, null);
-    } else if (!isCallbackScheduled) {
-      isCallbackScheduled = true;
-      scheduleDeferredCallback(performAsyncWork);
+    } else {
+      scheduleCallbackWithExpiration(expirationTime);
     }
   }
 
@@ -1454,8 +1461,14 @@ module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
     deadline = dl;
 
     // Keep working on roots until there's no more work, or until the we reach
-    // the deadlne.
+    // the deadline.
     findHighestPriorityRoot();
+
+    if (enableUserTimingAPI && deadline !== null) {
+      const didExpire = nextFlushedExpirationTime < recalculateCurrentTime();
+      stopRequestCallbackTimer(didExpire);
+    }
+
     while (
       nextFlushedRoot !== null &&
       nextFlushedExpirationTime !== NoWork &&
@@ -1473,12 +1486,12 @@ module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
 
     // If we're inside a callback, set this to false since we just completed it.
     if (deadline !== null) {
-      isCallbackScheduled = false;
+      callbackExpirationTime = NoWork;
+      callbackID = -1;
     }
     // If there's work left over, schedule a new callback.
-    if (nextFlushedRoot !== null && !isCallbackScheduled) {
-      isCallbackScheduled = true;
-      scheduleDeferredCallback(performAsyncWork);
+    if (nextFlushedExpirationTime !== NoWork) {
+      scheduleCallbackWithExpiration(nextFlushedExpirationTime);
     }
 
     // Clean-up.
@@ -1555,6 +1568,8 @@ module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
       return false;
     }
     if (deadline.timeRemaining() > timeHeuristicForUnitOfWork) {
+      // Disregard deadline.didTimeout. Only expired work should be flushed
+      // during a timeout. This path is only hit for non-expired work.
       return false;
     }
     deadlineDidExpire = true;
@@ -1634,4 +1649,4 @@ module.exports = function<T, P, I, TI, PI, C, CC, CX, PL>(
     flushSync,
     deferredUpdates,
   };
-};
+}

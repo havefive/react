@@ -5,8 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  *
  * @flow
+ * @providesModule ReactNativeRTTypes
  */
-'use strict';
 
 /**
  * Flat RT renderer bundles are too big for Flow to parse efficiently.

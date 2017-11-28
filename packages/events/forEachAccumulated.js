@@ -7,8 +7,6 @@
  * @flow
  */
 
-'use strict';
-
 /**
  * @param {array} arr an "accumulation" of items which is either an Array or
  * a single item. Useful when paired with the `accumulate` module. This is a
@@ -19,7 +17,7 @@
  * @param {?} [scope] Scope used as `this` in a callback.
  */
 function forEachAccumulated<T>(
-  arr: ?(T | Array<T>),
+  arr: ?(Array<T> | T),
   cb: (elem: T) => void,
   scope: ?any,
 ) {
@@ -30,4 +28,4 @@ function forEachAccumulated<T>(
   }
 }
 
-module.exports = forEachAccumulated;
+export default forEachAccumulated;
