@@ -12,21 +12,21 @@ import type {Fiber} from 'react-reconciler/src/ReactFiber';
 import invariant from 'fbjs/lib/invariant';
 import warning from 'fbjs/lib/warning';
 
-import * as ReactInstanceMap from './ReactInstanceMap';
-import {ReactCurrentOwner} from './ReactGlobalSharedState';
-import getComponentName from './getComponentName';
+import * as ReactInstanceMap from 'shared/ReactInstanceMap';
+import {ReactCurrentOwner} from 'shared/ReactGlobalSharedState';
+import getComponentName from 'shared/getComponentName';
 import {
   ClassComponent,
   HostComponent,
   HostRoot,
   HostPortal,
   HostText,
-} from './ReactTypeOfWork';
-import {NoEffect, Placement} from './ReactTypeOfSideEffect';
+} from 'shared/ReactTypeOfWork';
+import {NoEffect, Placement} from 'shared/ReactTypeOfSideEffect';
 
-var MOUNTING = 1;
-var MOUNTED = 2;
-var UNMOUNTED = 3;
+const MOUNTING = 1;
+const MOUNTED = 2;
+const UNMOUNTED = 3;
 
 function isFiberMountedImpl(fiber: Fiber): number {
   let node = fiber;
@@ -80,7 +80,7 @@ export function isMounted(component: React$Component<any, any>): boolean {
     }
   }
 
-  var fiber: ?Fiber = ReactInstanceMap.get(component);
+  const fiber: ?Fiber = ReactInstanceMap.get(component);
   if (!fiber) {
     return false;
   }
