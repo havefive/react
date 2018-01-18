@@ -65,6 +65,7 @@ export type HostConfig<T, P, I, TI, HI, PI, C, CC, CX, PL> = {
     type: T,
     props: P,
     rootContainerInstance: C,
+    hostContext: CX,
   ): boolean,
 
   prepareUpdate(
@@ -96,8 +97,6 @@ export type HostConfig<T, P, I, TI, HI, PI, C, CC, CX, PL> = {
   resetAfterCommit(): void,
 
   now(): number,
-
-  useSyncScheduling?: boolean,
 
   +hydration?: HydrationHostConfig<T, P, I, TI, HI, C, CX, PL>,
 

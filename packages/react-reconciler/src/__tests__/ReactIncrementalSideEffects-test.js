@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  *
  * @emails react-core
+ * @jest-environment node
  */
 
 'use strict';
@@ -18,10 +19,6 @@ describe('ReactIncrementalSideEffects', () => {
     React = require('react');
     ReactNoop = require('react-noop-renderer');
   });
-
-  function normalizeCodeLocInfo(str) {
-    return str && str.replace(/\(at .+?:\d+\)/g, '(at **)');
-  }
 
   function div(...children) {
     children = children.map(c => (typeof c === 'string' ? {text: c} : c));
@@ -351,7 +348,7 @@ describe('ReactIncrementalSideEffects', () => {
     ReactNoop.render(<Foo text="foo" step={1} />);
     ReactNoop.flush();
 
-    // Since we did nothing to the middle subtree during the interuption,
+    // Since we did nothing to the middle subtree during the interruption,
     // we should be able to reuse the reconciliation work that we already did
     // without restarting. The side-effects should still be replayed.
 
@@ -416,7 +413,7 @@ describe('ReactIncrementalSideEffects', () => {
     ReactNoop.render(<Foo text="foo" step={1} />);
     ReactNoop.flush(30);
 
-    // Since we did nothing to the middle subtree during the interuption,
+    // Since we did nothing to the middle subtree during the interruption,
     // we should be able to reuse the reconciliation work that we already did
     // without restarting. The side-effects should still be replayed.
 
@@ -986,7 +983,6 @@ describe('ReactIncrementalSideEffects', () => {
   });
 
   it('invokes ref callbacks after insertion/update/unmount', () => {
-    spyOnDev(console, 'error');
     let classInstance = null;
 
     let ops = [];
@@ -1013,7 +1009,14 @@ describe('ReactIncrementalSideEffects', () => {
     }
 
     ReactNoop.render(<Foo show={true} />);
-    ReactNoop.flush();
+    expect(ReactNoop.flush).toWarnDev(
+      'Warning: Stateless function components cannot be given refs. ' +
+        'Attempts to access this ref will fail.\n\nCheck the render method ' +
+        'of `Foo`.\n' +
+        '    in FunctionalComponent (at **)\n' +
+        '    in div (at **)\n' +
+        '    in Foo (at **)',
+    );
     expect(ops).toEqual([
       classInstance,
       // no call for functional components
@@ -1043,17 +1046,6 @@ describe('ReactIncrementalSideEffects', () => {
       null,
       null,
     ]);
-
-    if (__DEV__) {
-      expect(normalizeCodeLocInfo(console.error.calls.argsFor(0)[0])).toBe(
-        'Warning: Stateless function components cannot be given refs. ' +
-          'Attempts to access this ref will fail.\n\nCheck the render method ' +
-          'of `Foo`.\n' +
-          '    in FunctionalComponent (at **)\n' +
-          '    in div (at **)\n' +
-          '    in Foo (at **)',
-      );
-    }
   });
 
   // TODO: Test that mounts, updates, refs, unmounts and deletions happen in the
