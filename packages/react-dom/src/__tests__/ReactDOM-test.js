@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -9,59 +9,74 @@
 
 'use strict';
 
-let React = require('react');
-let ReactDOM = require('react-dom');
-const ReactTestUtils = require('react-dom/test-utils');
+let React;
+let ReactDOM;
+let ReactDOMServer;
+let ReactTestUtils;
+const ReactFeatureFlags = require('shared/ReactFeatureFlags');
 
 describe('ReactDOM', () => {
-  // TODO: uncomment this test once we can run in phantom, which
-  // supports real submit events.
-  /*
-  it('should bubble onSubmit', function() {
-    const count = 0;
-    const form;
-    const Parent = React.createClass({
-      handleSubmit: function() {
-        count++;
-        return false;
-      },
-      render: function() {
-        return <Child />;
-      }
-    });
-    const Child = React.createClass({
-      render: function() {
-        return <form><input type="submit" value="Submit" /></form>;
-      },
-      componentDidMount: function() {
-        form = ReactDOM.findDOMNode(this);
-      }
-    });
-    const instance = ReactTestUtils.renderIntoDocument(<Parent />);
-    form.submit();
-    expect(count).toEqual(1);
+  beforeEach(() => {
+    jest.resetModules();
+    React = require('react');
+    ReactDOM = require('react-dom');
+    ReactDOMServer = require('react-dom/server');
+    ReactTestUtils = require('react-dom/test-utils');
   });
-  */
+
+  it('should bubble onSubmit', function() {
+    const container = document.createElement('div');
+
+    let count = 0;
+    let buttonRef;
+
+    function Parent() {
+      return (
+        <div
+          onSubmit={event => {
+            event.preventDefault();
+            count++;
+          }}>
+          <Child />
+        </div>
+      );
+    }
+
+    function Child() {
+      return (
+        <form>
+          <input type="submit" ref={button => (buttonRef = button)} />
+        </form>
+      );
+    }
+
+    document.body.appendChild(container);
+    try {
+      ReactDOM.render(<Parent />, container);
+      buttonRef.click();
+      expect(count).toBe(1);
+    } finally {
+      document.body.removeChild(container);
+    }
+  });
 
   it('allows a DOM element to be used with a string', () => {
     const element = React.createElement('div', {className: 'foo'});
-    const instance = ReactTestUtils.renderIntoDocument(element);
-    expect(ReactDOM.findDOMNode(instance).tagName).toBe('DIV');
+    const node = ReactTestUtils.renderIntoDocument(element);
+    expect(node.tagName).toBe('DIV');
   });
 
   it('should allow children to be passed as an argument', () => {
-    const argDiv = ReactTestUtils.renderIntoDocument(
+    const argNode = ReactTestUtils.renderIntoDocument(
       React.createElement('div', null, 'child'),
     );
-    const argNode = ReactDOM.findDOMNode(argDiv);
     expect(argNode.innerHTML).toBe('child');
   });
 
   it('should overwrite props.children with children argument', () => {
-    const conflictDiv = ReactTestUtils.renderIntoDocument(
+    const conflictNode = ReactTestUtils.renderIntoDocument(
       React.createElement('div', {children: 'fakechild'}, 'child'),
     );
-    const conflictNode = ReactDOM.findDOMNode(conflictDiv);
     expect(conflictNode.innerHTML).toBe('child');
   });
 
@@ -103,8 +118,7 @@ describe('ReactDOM', () => {
         <div key="theBird" className="bird" />,
       </div>,
     );
-    const root = ReactDOM.findDOMNode(myDiv);
-    const dog = root.childNodes[0];
+    const dog = myDiv.childNodes[0];
     expect(dog.className).toBe('bigdog');
   });
 
@@ -126,7 +140,7 @@ describe('ReactDOM', () => {
     expect(() => {
       expect(() => {
         ReactDOM.render(<A />, myDiv, 'no');
-      }).toWarnDev(
+      }).toErrorDev(
         'render(...): Expected the last optional `callback` argument to be ' +
           'a function. Instead received: no.',
       );
@@ -138,7 +152,7 @@ describe('ReactDOM', () => {
     expect(() => {
       expect(() => {
         ReactDOM.render(<A />, myDiv, {foo: 'bar'});
-      }).toWarnDev(
+      }).toErrorDev(
         'render(...): Expected the last optional `callback` argument to be ' +
           'a function. Instead received: [object Object].',
       );
@@ -150,7 +164,7 @@ describe('ReactDOM', () => {
     expect(() => {
       expect(() => {
         ReactDOM.render(<A />, myDiv, new Foo());
-      }).toWarnDev(
+      }).toErrorDev(
         'render(...): Expected the last optional `callback` argument to be ' +
           'a function. Instead received: [object Object].',
       );
@@ -179,7 +193,7 @@ describe('ReactDOM', () => {
     expect(() => {
       expect(() => {
         ReactDOM.render(<A />, myDiv, 'no');
-      }).toWarnDev(
+      }).toErrorDev(
         'render(...): Expected the last optional `callback` argument to be ' +
           'a function. Instead received: no.',
       );
@@ -192,7 +206,7 @@ describe('ReactDOM', () => {
     expect(() => {
       expect(() => {
         ReactDOM.render(<A />, myDiv, {foo: 'bar'});
-      }).toWarnDev(
+      }).toErrorDev(
         'render(...): Expected the last optional `callback` argument to be ' +
           'a function. Instead received: [object Object].',
       );
@@ -205,7 +219,7 @@ describe('ReactDOM', () => {
     expect(() => {
       expect(() => {
         ReactDOM.render(<A />, myDiv, new Foo());
-      }).toWarnDev(
+      }).toErrorDev(
         'render(...): Expected the last optional `callback` argument to be ' +
           'a function. Instead received: [object Object].',
       );
@@ -242,34 +256,37 @@ describe('ReactDOM', () => {
     const log = [];
     const container = document.createElement('div');
     document.body.appendChild(container);
-    ReactDOM.render(<A showTwo={false} />, container);
-    input.focus();
+    try {
+      ReactDOM.render(<A showTwo={false} />, container);
+      input.focus();
 
-    // When the second input is added, let's simulate losing focus, which is
-    // something that could happen when manipulating DOM nodes (but is hard to
-    // deterministically force without relying intensely on React DOM
-    // implementation details)
-    const div = container.firstChild;
-    ['appendChild', 'insertBefore'].forEach(name => {
-      const mutator = div[name];
-      div[name] = function() {
-        if (input) {
-          input.blur();
-          expect(document.activeElement.tagName).toBe('BODY');
-          log.push('input2 inserted');
-        }
-        return mutator.apply(this, arguments);
-      };
-    });
+      // When the second input is added, let's simulate losing focus, which is
+      // something that could happen when manipulating DOM nodes (but is hard to
+      // deterministically force without relying intensely on React DOM
+      // implementation details)
+      const div = container.firstChild;
+      ['appendChild', 'insertBefore'].forEach(name => {
+        const mutator = div[name];
+        div[name] = function() {
+          if (input) {
+            input.blur();
+            expect(document.activeElement.tagName).toBe('BODY');
+            log.push('input2 inserted');
+          }
+          return mutator.apply(this, arguments);
+        };
+      });
 
-    expect(document.activeElement.id).toBe('one');
-    ReactDOM.render(<A showTwo={true} />, container);
-    // input2 gets added, which causes input to get blurred. Then
-    // componentDidUpdate focuses input2 and that should make it down to here,
-    // not get overwritten by focus restoration.
-    expect(document.activeElement.id).toBe('two');
-    expect(log).toEqual(['input2 inserted', 'input2 focused']);
-    document.body.removeChild(container);
+      expect(document.activeElement.id).toBe('one');
+      ReactDOM.render(<A showTwo={true} />, container);
+      // input2 gets added, which causes input to get blurred. Then
+      // componentDidUpdate focuses input2 and that should make it down to here,
+      // not get overwritten by focus restoration.
+      expect(document.activeElement.id).toBe('two');
+      expect(log).toEqual(['input2 inserted', 'input2 focused']);
+    } finally {
+      document.body.removeChild(container);
+    }
   });
 
   it('calls focus() on autoFocus elements after they have been mounted to the DOM', () => {
@@ -308,20 +325,9 @@ describe('ReactDOM', () => {
   it("shouldn't fire duplicate event handler while handling other nested dispatch", () => {
     const actual = [];
 
-    function click(node) {
-      const fakeNativeEvent = function() {};
-      fakeNativeEvent.target = node;
-      fakeNativeEvent.path = [node, container];
-      ReactTestUtils.simulateNativeEventOnNode(
-        'topClick',
-        node,
-        fakeNativeEvent,
-      );
-    }
-
     class Wrapper extends React.Component {
       componentDidMount() {
-        click(this.ref1);
+        this.ref1.click();
       }
 
       render() {
@@ -330,7 +336,7 @@ describe('ReactDOM', () => {
             <div
               onClick={() => {
                 actual.push('1st node clicked');
-                click(this.ref2);
+                this.ref2.click();
               }}
               ref={ref => (this.ref1 = ref)}
             />
@@ -346,13 +352,38 @@ describe('ReactDOM', () => {
     }
 
     const container = document.createElement('div');
-    ReactDOM.render(<Wrapper />, container);
+    document.body.appendChild(container);
+    try {
+      ReactDOM.render(<Wrapper />, container);
+      let expected;
 
-    const expected = [
-      '1st node clicked',
-      "2nd node clicked imperatively from 1st's handler",
-    ];
-    expect(actual).toEqual(expected);
+      if (
+        ReactFeatureFlags.enableModernEventSystem &
+        ReactFeatureFlags.enableLegacyFBSupport
+      ) {
+        // We expect to duplicate the 2nd handler because this test is
+        // not really designed around how the legacy FB support system works.
+        // This is because the above test sync fires a click() event
+        // during that of another click event, which causes the FB support system
+        // to duplicate adding an event listener. In practice this would never
+        // happen, as we only apply the legacy FB logic for "click" events,
+        // which would never stack this way in product code.
+        expected = [
+          '1st node clicked',
+          "2nd node clicked imperatively from 1st's handler",
+          "2nd node clicked imperatively from 1st's handler",
+        ];
+      } else {
+        expected = [
+          '1st node clicked',
+          "2nd node clicked imperatively from 1st's handler",
+        ];
+      }
+
+      expect(actual).toEqual(expected);
+    } finally {
+      document.body.removeChild(container);
+    }
   });
 
   it('should not crash with devtools installed', () => {
@@ -377,28 +408,30 @@ describe('ReactDOM', () => {
     }
   });
 
-  // https://github.com/facebook/react/issues/11689
-  it('should warn when attempting to inject an event plugin', () => {
-    expect(() => {
-      ReactDOM.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED.EventPluginHub.injection.injectEventPluginsByName(
-        {
-          TapEventPlugin: {
-            extractEvents() {},
-          },
-        },
-      );
-    }).toLowPriorityWarnDev(
-      'Injecting custom event plugins (TapEventPlugin) is deprecated ' +
-        'and will not work in React 17+. Please update your code ' +
-        'to not depend on React internals. The stack trace for this ' +
-        'warning should reveal the library that is using them. ' +
-        'See https://github.com/facebook/react/issues/11689 for a discussion.',
-    );
+  it('should not crash calling findDOMNode inside a function component', () => {
+    const container = document.createElement('div');
+
+    class Component extends React.Component {
+      render() {
+        return <div />;
+      }
+    }
+
+    const instance = ReactTestUtils.renderIntoDocument(<Component />);
+    const App = () => {
+      ReactDOM.findDOMNode(instance);
+      return <div />;
+    };
+
+    if (__DEV__) {
+      ReactDOM.render(<App />, container);
+    }
   });
 
   it('throws in DEV if jsdom is destroyed by the time setState() is called', () => {
     class App extends React.Component {
       state = {x: 1};
+      componentDidUpdate() {}
       render() {
         return <div />;
       }
@@ -414,6 +447,10 @@ describe('ReactDOM', () => {
       // This is roughly what happens if the test finished and then
       // an asynchronous callback tried to setState() after this.
       delete global.document;
+
+      // The error we're interested in is thrown by invokeGuardedCallback, which
+      // in DEV is used 1) to replay a failed begin phase, or 2) when calling
+      // lifecycle methods. We're triggering the second case here.
       const fn = () => instance.setState({x: 2});
       if (__DEV__) {
         expect(fn).toThrow(
@@ -432,5 +469,65 @@ describe('ReactDOM', () => {
       // Don't break other tests.
       Object.defineProperty(global, 'document', documentDescriptor);
     }
+  });
+
+  it('reports stacks with re-entrant renderToString() calls on the client', () => {
+    function Child2(props) {
+      return <span ariaTypo3="no">{props.children}</span>;
+    }
+
+    function App2() {
+      return (
+        <Child2>
+          {ReactDOMServer.renderToString(<blink ariaTypo2="no" />)}
+        </Child2>
+      );
+    }
+
+    function Child() {
+      return (
+        <span ariaTypo4="no">{ReactDOMServer.renderToString(<App2 />)}</span>
+      );
+    }
+
+    function ServerEntry() {
+      return ReactDOMServer.renderToString(<Child />);
+    }
+
+    function App() {
+      return (
+        <div>
+          <span ariaTypo="no" />
+          <ServerEntry />
+          <font ariaTypo5="no" />
+        </div>
+      );
+    }
+
+    const container = document.createElement('div');
+    expect(() => ReactDOM.render(<App />, container)).toErrorDev([
+      // ReactDOM(App > div > span)
+      'Invalid ARIA attribute `ariaTypo`. ARIA attributes follow the pattern aria-* and must be lowercase.\n' +
+        '    in span (at **)\n' +
+        '    in div (at **)\n' +
+        '    in App (at **)',
+      // ReactDOM(App > div > ServerEntry) >>> ReactDOMServer(Child) >>> ReactDOMServer(App2) >>> ReactDOMServer(blink)
+      'Invalid ARIA attribute `ariaTypo2`. ARIA attributes follow the pattern aria-* and must be lowercase.\n' +
+        '    in blink (at **)',
+      // ReactDOM(App > div > ServerEntry) >>> ReactDOMServer(Child) >>> ReactDOMServer(App2 > Child2 > span)
+      'Invalid ARIA attribute `ariaTypo3`. ARIA attributes follow the pattern aria-* and must be lowercase.\n' +
+        '    in span (at **)\n' +
+        '    in Child2 (at **)\n' +
+        '    in App2 (at **)',
+      // ReactDOM(App > div > ServerEntry) >>> ReactDOMServer(Child > span)
+      'Invalid ARIA attribute `ariaTypo4`. ARIA attributes follow the pattern aria-* and must be lowercase.\n' +
+        '    in span (at **)\n' +
+        '    in Child (at **)',
+      // ReactDOM(App > div > font)
+      'Invalid ARIA attribute `ariaTypo5`. ARIA attributes follow the pattern aria-* and must be lowercase.\n' +
+        '    in font (at **)\n' +
+        '    in div (at **)\n' +
+        '    in App (at **)',
+    ]);
   });
 });

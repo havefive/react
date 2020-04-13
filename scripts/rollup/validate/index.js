@@ -55,12 +55,8 @@ function checkFilesExist(bundle) {
 
 const bundles = [
   {
-    format: 'fb',
-    filePatterns: [`./build/facebook-www/*.js`],
-  },
-  {
     format: 'rn',
-    filePatterns: [`./build/{react-cs,react-native,react-rt}/*.js`],
+    filePatterns: [`./build/react-native/implementations/*.js`],
   },
   {
     format: 'umd',
@@ -74,5 +70,12 @@ const bundles = [
     ],
   },
 ];
+
+if (process.env.RELEASE_CHANNEL === 'experimental') {
+  bundles.push({
+    format: 'fb',
+    filePatterns: [`./build/facebook-www/*.js`],
+  });
+}
 
 bundles.map(checkFilesExist).map(lint);

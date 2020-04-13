@@ -1,67 +1,122 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
+ *
+ * @flow
  */
 
-import assign from 'object-assign';
 import ReactVersion from 'shared/ReactVersion';
-import {REACT_FRAGMENT_TYPE} from 'shared/ReactSymbols';
-
-import {Component, PureComponent, AsyncComponent} from './ReactBaseClasses';
-import {forEach, map, count, toArray, only} from './ReactChildren';
-import ReactCurrentOwner from './ReactCurrentOwner';
 import {
-  createElement,
-  createFactory,
-  cloneElement,
+  REACT_FRAGMENT_TYPE,
+  REACT_PROFILER_TYPE,
+  REACT_STRICT_MODE_TYPE,
+  REACT_SUSPENSE_TYPE,
+  REACT_SUSPENSE_LIST_TYPE,
+} from 'shared/ReactSymbols';
+
+import {Component, PureComponent} from './ReactBaseClasses';
+import {createRef} from './ReactCreateRef';
+import {forEach, map, count, toArray, only} from './ReactChildren';
+import {
+  createElement as createElementProd,
+  createFactory as createFactoryProd,
+  cloneElement as cloneElementProd,
   isValidElement,
 } from './ReactElement';
+import {createContext} from './ReactContext';
+import {lazy} from './ReactLazy';
+import {forwardRef} from './ReactForwardRef';
+import {memo} from './ReactMemo';
+import {block} from './ReactBlock';
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useImperativeHandle,
+  useDebugValue,
+  useLayoutEffect,
+  useMemo,
+  useMutableSource,
+  useReducer,
+  useRef,
+  useState,
+  useResponder,
+  useTransition,
+  useDeferredValue,
+  useOpaqueIdentifier,
+} from './ReactHooks';
+import {withSuspenseConfig} from './ReactBatchConfig';
 import {
   createElementWithValidation,
   createFactoryWithValidation,
   cloneElementWithValidation,
 } from './ReactElementValidator';
-import ReactDebugCurrentFrame from './ReactDebugCurrentFrame';
+import {createMutableSource} from './ReactMutableSource';
+import ReactSharedInternals from './ReactSharedInternals';
+import {createFundamental} from './ReactFundamental';
+import {createEventResponder} from './ReactEventResponder';
+import {createScope} from './ReactScope';
 
-const React = {
-  Children: {
-    map,
-    forEach,
-    count,
-    toArray,
-    only,
-  },
+// TODO: Move this branching into the other module instead and just re-export.
+const createElement = __DEV__ ? createElementWithValidation : createElementProd;
+const cloneElement = __DEV__ ? cloneElementWithValidation : cloneElementProd;
+const createFactory = __DEV__ ? createFactoryWithValidation : createFactoryProd;
 
-  Component,
-  PureComponent,
-  unstable_AsyncComponent: AsyncComponent,
-
-  Fragment: REACT_FRAGMENT_TYPE,
-
-  createElement: __DEV__ ? createElementWithValidation : createElement,
-  cloneElement: __DEV__ ? cloneElementWithValidation : cloneElement,
-  createFactory: __DEV__ ? createFactoryWithValidation : createFactory,
-  isValidElement: isValidElement,
-
-  version: ReactVersion,
-
-  __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED: {
-    ReactCurrentOwner,
-    // Used by renderers to avoid bundling object-assign twice in UMD bundles:
-    assign,
-  },
+const Children = {
+  map,
+  forEach,
+  count,
+  toArray,
+  only,
 };
 
-if (__DEV__) {
-  Object.assign(React.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED, {
-    // These should not be included in production.
-    ReactDebugCurrentFrame,
-    // Shim for React DOM 16.0.0 which still destructured (but not used) this.
-    // TODO: remove in React 17.0.
-    ReactComponentTreeHook: {},
-  });
-}
-
-export default React;
+export {
+  Children,
+  createMutableSource,
+  createRef,
+  Component,
+  PureComponent,
+  createContext,
+  forwardRef,
+  lazy,
+  memo,
+  useCallback,
+  useContext,
+  useEffect,
+  useImperativeHandle,
+  useDebugValue,
+  useLayoutEffect,
+  useMemo,
+  useMutableSource,
+  useReducer,
+  useRef,
+  useState,
+  REACT_FRAGMENT_TYPE as Fragment,
+  REACT_PROFILER_TYPE as Profiler,
+  REACT_STRICT_MODE_TYPE as StrictMode,
+  REACT_SUSPENSE_TYPE as Suspense,
+  createElement,
+  cloneElement,
+  isValidElement,
+  ReactVersion as version,
+  ReactSharedInternals as __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED,
+  // Deprecated behind disableCreateFactory
+  createFactory,
+  // Concurrent Mode
+  useTransition,
+  useDeferredValue,
+  REACT_SUSPENSE_LIST_TYPE as SuspenseList,
+  withSuspenseConfig as unstable_withSuspenseConfig,
+  // enableBlocksAPI
+  block,
+  // enableDeprecatedFlareAPI
+  useResponder as DEPRECATED_useResponder,
+  createEventResponder as DEPRECATED_createResponder,
+  // enableFundamentalAPI
+  createFundamental as unstable_createFundamental,
+  // enableScopeAPI
+  createScope as unstable_createScope,
+  useOpaqueIdentifier as unstable_useOpaqueIdentifier,
+};

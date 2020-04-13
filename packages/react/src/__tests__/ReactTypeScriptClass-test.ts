@@ -3,7 +3,7 @@
 /// <reference path="./testDefinitions/ReactDOM.d.ts" />
 
 /*!
- * Copyright (c) 2015-present, Facebook, Inc.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -117,7 +117,7 @@ class RenderOnce extends React.Component {
   state = {
     bar: this.props.initialValue,
   };
-  componentWillMount() {
+  UNSAFE_componentWillMount() {
     this.setState({bar: 'bar'});
   }
   render() {
@@ -206,20 +206,20 @@ let lifeCycles = [];
 class NormalLifeCycles extends React.Component {
   props: any;
   state = {};
-  componentWillMount() {
+  UNSAFE_componentWillMount() {
     lifeCycles.push('will-mount');
   }
   componentDidMount() {
     lifeCycles.push('did-mount');
   }
-  componentWillReceiveProps(nextProps) {
+  UNSAFE_componentWillReceiveProps(nextProps) {
     lifeCycles.push('receive-props', nextProps);
   }
   shouldComponentUpdate(nextProps, nextState) {
     lifeCycles.push('should-update', nextProps, nextState);
     return true;
   }
-  componentWillUpdate(nextProps, nextState) {
+  UNSAFE_componentWillUpdate(nextProps, nextState) {
     lifeCycles.push('will-update', nextProps, nextState);
   }
   componentDidUpdate(prevProps, prevState) {
@@ -239,6 +239,7 @@ let getInitialStateWasCalled = false;
 let getDefaultPropsWasCalled = false;
 class ClassicProperties extends React.Component {
   contextTypes = {};
+  contextType = {};
   propTypes = {};
   getDefaultProps() {
     getDefaultPropsWasCalled = true;
@@ -266,6 +267,16 @@ class MisspelledComponent1 extends React.Component {
 // it should warn when misspelling componentWillReceiveProps
 class MisspelledComponent2 extends React.Component {
   componentWillRecieveProps() {
+    return false;
+  }
+  render() {
+    return React.createElement('span', {className: 'foo'});
+  }
+}
+
+// it should warn when misspelling UNSAFE_componentWillReceiveProps
+class MisspelledComponent3 extends React.Component {
+  UNSAFE_componentWillRecieveProps() {
     return false;
   }
   render() {
@@ -315,10 +326,13 @@ describe('ReactTypeScriptClass', function() {
       expect(() =>
         ReactDOM.render(React.createElement(Empty), container)
       ).toThrow()
-    ).toWarnDev(
+    ).toErrorDev([
+      // A failed component renders twice in DEV
       'Warning: Empty(...): No `render` method found on the returned ' +
-        'component instance: you may have forgotten to define `render`.'
-    );
+        'component instance: you may have forgotten to define `render`.',
+      'Warning: Empty(...): No `render` method found on the returned ' +
+        'component instance: you may have forgotten to define `render`.',
+    ]);
   });
 
   it('renders a simple stateless component with prop', function() {
@@ -344,6 +358,142 @@ describe('ReactTypeScriptClass', function() {
     test(React.createElement(StateBasedOnProps), 'SPAN', 'bar');
   });
 
+  it('sets initial state with value returned by static getDerivedStateFromProps', function() {
+    class Foo extends React.Component {
+      state = {
+        foo: null,
+        bar: null,
+      };
+      static getDerivedStateFromProps(nextProps, prevState) {
+        return {
+          foo: nextProps.foo,
+          bar: 'bar',
+        };
+      }
+      render() {
+        return React.createElement('div', {
+          className: `${this.state.foo} ${this.state.bar}`,
+        });
+      }
+    }
+    test(React.createElement(Foo, {foo: 'foo'}), 'DIV', 'foo bar');
+  });
+
+  it('warns if getDerivedStateFromProps is not static', function() {
+    class Foo extends React.Component {
+      getDerivedStateFromProps() {
+        return {};
+      }
+      render() {
+        return React.createElement('div', {});
+      }
+    }
+    expect(function() {
+      ReactDOM.render(React.createElement(Foo, {foo: 'foo'}), container);
+    }).toErrorDev(
+      'Foo: getDerivedStateFromProps() is defined as an instance method ' +
+        'and will be ignored. Instead, declare it as a static method.'
+    );
+  });
+
+  it('warns if getDerivedStateFromError is not static', function() {
+    class Foo extends React.Component {
+      getDerivedStateFromError() {
+        return {};
+      }
+      render() {
+        return React.createElement('div');
+      }
+    }
+    expect(function() {
+      ReactDOM.render(React.createElement(Foo, {foo: 'foo'}), container);
+    }).toErrorDev(
+      'Foo: getDerivedStateFromError() is defined as an instance method ' +
+        'and will be ignored. Instead, declare it as a static method.'
+    );
+  });
+
+  it('warns if getSnapshotBeforeUpdate is static', function() {
+    class Foo extends React.Component {
+      static getSnapshotBeforeUpdate() {
+      }
+      render() {
+        return React.createElement('div', {});
+      }
+    }
+    expect(function() {
+      ReactDOM.render(React.createElement(Foo, {foo: 'foo'}), container);
+    }).toErrorDev(
+      'Foo: getSnapshotBeforeUpdate() is defined as a static method ' +
+        'and will be ignored. Instead, declare it as an instance method.'
+    );
+  });
+
+  it('warns if state not initialized before static getDerivedStateFromProps', function() {
+    class Foo extends React.Component {
+      static getDerivedStateFromProps(nextProps, prevState) {
+        return {
+          foo: nextProps.foo,
+          bar: 'bar',
+        };
+      }
+      render() {
+        return React.createElement('div', {
+          className: `${this.state.foo} ${this.state.bar}`,
+        });
+      }
+    }
+    expect(function() {
+      ReactDOM.render(React.createElement(Foo, {foo: 'foo'}), container);
+    }).toErrorDev(
+      '`Foo` uses `getDerivedStateFromProps` but its initial state is ' +
+      'undefined. This is not recommended. Instead, define the initial state by ' +
+      'assigning an object to `this.state` in the constructor of `Foo`. ' +
+      'This ensures that `getDerivedStateFromProps` arguments have a consistent shape.'
+    );
+  });
+
+  it('updates initial state with values returned by static getDerivedStateFromProps', function() {
+    class Foo extends React.Component {
+      state = {
+        foo: 'foo',
+        bar: 'bar',
+      };
+      static getDerivedStateFromProps(nextProps, prevState) {
+        return {
+          foo: `not-${prevState.foo}`,
+        };
+      }
+      render() {
+        return React.createElement('div', {
+          className: `${this.state.foo} ${this.state.bar}`,
+        });
+      }
+    }
+    test(React.createElement(Foo), 'DIV', 'not-foo bar');
+  });
+
+  it('renders updated state with values returned by static getDerivedStateFromProps', function() {
+    class Foo extends React.Component {
+      state = {
+        value: 'initial',
+      };
+      static getDerivedStateFromProps(nextProps, prevState) {
+        if (nextProps.update) {
+          return {
+            value: 'updated',
+          };
+        }
+        return null;
+      }
+      render() {
+        return React.createElement('div', {className: this.state.value});
+      }
+    }
+    test(React.createElement(Foo, {update: false}), 'DIV', 'initial');
+    test(React.createElement(Foo, {update: true}), 'DIV', 'updated');
+  });
+
   it('renders based on context in the constructor', function() {
     test(React.createElement(ProvideChildContextTypes), 'SPAN', 'foo');
   });
@@ -355,13 +505,13 @@ describe('ReactTypeScriptClass', function() {
   });
 
   it('should warn with non-object in the initial state property', function() {
-    expect(() => test(React.createElement(ArrayState), 'SPAN', '')).toWarnDev(
+    expect(() => test(React.createElement(ArrayState), 'SPAN', '')).toErrorDev(
       'ArrayState.state: must be set to an object or null'
     );
-    expect(() => test(React.createElement(StringState), 'SPAN', '')).toWarnDev(
+    expect(() => test(React.createElement(StringState), 'SPAN', '')).toErrorDev(
       'StringState.state: must be set to an object or null'
     );
-    expect(() => test(React.createElement(NumberState), 'SPAN', '')).toWarnDev(
+    expect(() => test(React.createElement(NumberState), 'SPAN', '')).toErrorDev(
       'NumberState.state: must be set to an object or null'
     );
   });
@@ -431,13 +581,14 @@ describe('ReactTypeScriptClass', function() {
       getDefaultPropsWasCalled = false;
       expect(() =>
         test(React.createElement(ClassicProperties), 'SPAN', 'foo')
-      ).toWarnDev([
+      ).toErrorDev([
         'getInitialState was defined on ClassicProperties, ' +
           'a plain JavaScript class.',
         'getDefaultProps was defined on ClassicProperties, ' +
           'a plain JavaScript class.',
         'propTypes was defined as an instance property on ClassicProperties.',
         'contextTypes was defined as an instance property on ClassicProperties.',
+        'contextType was defined as an instance property on ClassicProperties.',
       ]);
       expect(getInitialStateWasCalled).toBe(false);
       expect(getDefaultPropsWasCalled).toBe(false);
@@ -465,7 +616,7 @@ describe('ReactTypeScriptClass', function() {
   it('should warn when misspelling shouldComponentUpdate', function() {
     expect(() =>
       test(React.createElement(MisspelledComponent1), 'SPAN', 'foo')
-    ).toWarnDev(
+    ).toErrorDev(
       'Warning: ' +
         'MisspelledComponent1 has a method called componentShouldUpdate(). Did ' +
         'you mean shouldComponentUpdate()? The name is phrased as a question ' +
@@ -476,10 +627,20 @@ describe('ReactTypeScriptClass', function() {
   it('should warn when misspelling componentWillReceiveProps', function() {
     expect(() =>
       test(React.createElement(MisspelledComponent2), 'SPAN', 'foo')
-    ).toWarnDev(
+    ).toErrorDev(
       'Warning: ' +
         'MisspelledComponent2 has a method called componentWillRecieveProps(). ' +
         'Did you mean componentWillReceiveProps()?'
+    );
+  });
+
+  it('should warn when misspelling UNSAFE_componentWillReceiveProps', function() {
+    expect(() =>
+      test(React.createElement(MisspelledComponent3), 'SPAN', 'foo')
+    ).toErrorDev(
+      'Warning: ' +
+        'MisspelledComponent3 has a method called UNSAFE_componentWillRecieveProps(). ' +
+        'Did you mean UNSAFE_componentWillReceiveProps()?'
     );
   });
 
@@ -491,13 +652,15 @@ describe('ReactTypeScriptClass', function() {
     );
     expect(() =>
       expect(() => instance.replaceState({})).toThrow()
-    ).toLowPriorityWarnDev(
-      'replaceState(...) is deprecated in plain JavaScript React classes'
+    ).toWarnDev(
+      'replaceState(...) is deprecated in plain JavaScript React classes',
+      {withoutStack: true}
     );
     expect(() =>
       expect(() => instance.isMounted()).toThrow()
-    ).toLowPriorityWarnDev(
-      'isMounted(...) is deprecated in plain JavaScript React classes'
+    ).toWarnDev(
+      'isMounted(...) is deprecated in plain JavaScript React classes',
+      {withoutStack: true}
     );
   });
 

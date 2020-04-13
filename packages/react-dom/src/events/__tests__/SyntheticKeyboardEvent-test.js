@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -451,6 +451,53 @@ describe('SyntheticKeyboardEvent', () => {
         });
       });
     });
+
+    describe('code', () => {
+      it('returns code on `keydown`, `keyup` and `keypress`', () => {
+        let codeDown = null;
+        let codeUp = null;
+        let codePress = null;
+        const node = ReactDOM.render(
+          <input
+            onKeyDown={e => {
+              codeDown = e.code;
+            }}
+            onKeyUp={e => {
+              codeUp = e.code;
+            }}
+            onKeyPress={e => {
+              codePress = e.code;
+            }}
+          />,
+          container,
+        );
+        node.dispatchEvent(
+          new KeyboardEvent('keydown', {
+            code: 'KeyQ',
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+        node.dispatchEvent(
+          new KeyboardEvent('keyup', {
+            code: 'KeyQ',
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+        node.dispatchEvent(
+          new KeyboardEvent('keypress', {
+            code: 'KeyQ',
+            charCode: 113,
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+        expect(codeDown).toBe('KeyQ');
+        expect(codeUp).toBe('KeyQ');
+        expect(codePress).toBe('KeyQ');
+      });
+    });
   });
 
   describe('EventInterface', () => {
@@ -466,7 +513,7 @@ describe('SyntheticKeyboardEvent', () => {
         expect(event.isPropagationStopped()).toBe(true);
         expectedCount++;
       };
-      let div = ReactDOM.render(
+      const div = ReactDOM.render(
         <div
           onKeyDown={eventHandler}
           onKeyUp={eventHandler}
@@ -508,7 +555,7 @@ describe('SyntheticKeyboardEvent', () => {
         expect(event.isPersistent()).toBe(true);
         persistentEvents.push(event);
       };
-      let div = ReactDOM.render(
+      const div = ReactDOM.render(
         <div
           onKeyDown={eventHandler}
           onKeyUp={eventHandler}

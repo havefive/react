@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -8,23 +8,17 @@
 import {
   registrationNameModules,
   possibleRegistrationNames,
-} from 'events/EventPluginRegistry';
-import {ReactDebugCurrentFrame} from 'shared/ReactGlobalSharedState';
-import warning from 'fbjs/lib/warning';
+} from 'legacy-events/EventPluginRegistry';
 
 import {
   ATTRIBUTE_NAME_CHAR,
+  BOOLEAN,
   RESERVED,
   shouldRemoveAttributeWithWarning,
   getPropertyInfo,
 } from './DOMProperty';
 import isCustomComponent from './isCustomComponent';
 import possibleStandardNames from './possibleStandardNames';
-
-function getStackAddendum() {
-  const stack = ReactDebugCurrentFrame.getStackAddendum();
-  return stack != null ? stack : '';
-}
 
 let validateProperty = () => {};
 
@@ -43,8 +37,7 @@ if (__DEV__) {
 
     const lowerCasedName = name.toLowerCase();
     if (lowerCasedName === 'onfocusin' || lowerCasedName === 'onfocusout') {
-      warning(
-        false,
+      console.error(
         'React uses onFocus and onBlur instead of onFocusIn and onFocusOut. ' +
           'All React events are normalized to bubble, so onFocusIn and onFocusOut ' +
           'are not needed/supported by React.',
@@ -64,22 +57,18 @@ if (__DEV__) {
         ? possibleRegistrationNames[lowerCasedName]
         : null;
       if (registrationName != null) {
-        warning(
-          false,
-          'Invalid event handler property `%s`. Did you mean `%s`?%s',
+        console.error(
+          'Invalid event handler property `%s`. Did you mean `%s`?',
           name,
           registrationName,
-          getStackAddendum(),
         );
         warnedProperties[name] = true;
         return true;
       }
       if (EVENT_NAME_REGEX.test(name)) {
-        warning(
-          false,
-          'Unknown event handler property `%s`. It will be ignored.%s',
+        console.error(
+          'Unknown event handler property `%s`. It will be ignored.',
           name,
-          getStackAddendum(),
         );
         warnedProperties[name] = true;
         return true;
@@ -89,12 +78,10 @@ if (__DEV__) {
       // So we can't tell if the event name is correct for sure, but we can filter
       // out known bad ones like `onclick`. We can't suggest a specific replacement though.
       if (INVALID_EVENT_NAME_REGEX.test(name)) {
-        warning(
-          false,
+        console.error(
           'Invalid event handler property `%s`. ' +
-            'React events use the camelCase naming convention, for example `onClick`.%s',
+            'React events use the camelCase naming convention, for example `onClick`.',
           name,
-          getStackAddendum(),
         );
       }
       warnedProperties[name] = true;
@@ -107,8 +94,7 @@ if (__DEV__) {
     }
 
     if (lowerCasedName === 'innerhtml') {
-      warning(
-        false,
+      console.error(
         'Directly setting property `innerHTML` is not permitted. ' +
           'For more information, lookup documentation on `dangerouslySetInnerHTML`.',
       );
@@ -117,8 +103,7 @@ if (__DEV__) {
     }
 
     if (lowerCasedName === 'aria') {
-      warning(
-        false,
+      console.error(
         'The `aria` attribute is reserved for future use in React. ' +
           'Pass individual `aria-` attributes instead.',
       );
@@ -132,24 +117,20 @@ if (__DEV__) {
       value !== undefined &&
       typeof value !== 'string'
     ) {
-      warning(
-        false,
+      console.error(
         'Received a `%s` for a string attribute `is`. If this is expected, cast ' +
-          'the value to a string.%s',
+          'the value to a string.',
         typeof value,
-        getStackAddendum(),
       );
       warnedProperties[name] = true;
       return true;
     }
 
     if (typeof value === 'number' && isNaN(value)) {
-      warning(
-        false,
+      console.error(
         'Received NaN for the `%s` attribute. If this is expected, cast ' +
-          'the value to a string.%s',
+          'the value to a string.',
         name,
-        getStackAddendum(),
       );
       warnedProperties[name] = true;
       return true;
@@ -162,12 +143,10 @@ if (__DEV__) {
     if (possibleStandardNames.hasOwnProperty(lowerCasedName)) {
       const standardName = possibleStandardNames[lowerCasedName];
       if (standardName !== name) {
-        warning(
-          false,
-          'Invalid DOM property `%s`. Did you mean `%s`?%s',
+        console.error(
+          'Invalid DOM property `%s`. Did you mean `%s`?',
           name,
           standardName,
-          getStackAddendum(),
         );
         warnedProperties[name] = true;
         return true;
@@ -175,16 +154,14 @@ if (__DEV__) {
     } else if (!isReserved && name !== lowerCasedName) {
       // Unknown attributes should have lowercase casing since that's how they
       // will be cased anyway with server rendering.
-      warning(
-        false,
+      console.error(
         'React does not recognize the `%s` prop on a DOM element. If you ' +
           'intentionally want it to appear in the DOM as a custom ' +
           'attribute, spell it as lowercase `%s` instead. ' +
           'If you accidentally passed it from a parent component, remove ' +
-          'it from the DOM element.%s',
+          'it from the DOM element.',
         name,
         lowerCasedName,
-        getStackAddendum(),
       );
       warnedProperties[name] = true;
       return true;
@@ -195,26 +172,23 @@ if (__DEV__) {
       shouldRemoveAttributeWithWarning(name, value, propertyInfo, false)
     ) {
       if (value) {
-        warning(
-          false,
+        console.error(
           'Received `%s` for a non-boolean attribute `%s`.\n\n' +
             'If you want to write it to the DOM, pass a string instead: ' +
-            '%s="%s" or %s={value.toString()}.%s',
+            '%s="%s" or %s={value.toString()}.',
           value,
           name,
           name,
           value,
           name,
-          getStackAddendum(),
         );
       } else {
-        warning(
-          false,
+        console.error(
           'Received `%s` for a non-boolean attribute `%s`.\n\n' +
             'If you want to write it to the DOM, pass a string instead: ' +
             '%s="%s" or %s={value.toString()}.\n\n' +
             'If you used to conditionally omit it with %s={condition && value}, ' +
-            'pass %s={condition ? value : undefined} instead.%s',
+            'pass %s={condition ? value : undefined} instead.',
           value,
           name,
           name,
@@ -222,7 +196,6 @@ if (__DEV__) {
           name,
           name,
           name,
-          getStackAddendum(),
         );
       }
       warnedProperties[name] = true;
@@ -241,42 +214,67 @@ if (__DEV__) {
       return false;
     }
 
+    // Warn when passing the strings 'false' or 'true' into a boolean prop
+    if (
+      (value === 'false' || value === 'true') &&
+      propertyInfo !== null &&
+      propertyInfo.type === BOOLEAN
+    ) {
+      console.error(
+        'Received the string `%s` for the boolean attribute `%s`. ' +
+          '%s ' +
+          'Did you mean %s={%s}?',
+        value,
+        name,
+        value === 'false'
+          ? 'The browser will interpret it as a truthy value.'
+          : 'Although this works, it will not work as expected if you pass the string "false".',
+        name,
+        value,
+      );
+      warnedProperties[name] = true;
+      return true;
+    }
+
     return true;
   };
 }
 
 const warnUnknownProperties = function(type, props, canUseEventSystem) {
-  const unknownProps = [];
-  for (const key in props) {
-    const isValid = validateProperty(type, key, props[key], canUseEventSystem);
-    if (!isValid) {
-      unknownProps.push(key);
+  if (__DEV__) {
+    const unknownProps = [];
+    for (const key in props) {
+      const isValid = validateProperty(
+        type,
+        key,
+        props[key],
+        canUseEventSystem,
+      );
+      if (!isValid) {
+        unknownProps.push(key);
+      }
     }
-  }
 
-  const unknownPropString = unknownProps
-    .map(prop => '`' + prop + '`')
-    .join(', ');
-  if (unknownProps.length === 1) {
-    warning(
-      false,
-      'Invalid value for prop %s on <%s> tag. Either remove it from the element, ' +
-        'or pass a string or number value to keep it in the DOM. ' +
-        'For details, see https://fb.me/react-attribute-behavior%s',
-      unknownPropString,
-      type,
-      getStackAddendum(),
-    );
-  } else if (unknownProps.length > 1) {
-    warning(
-      false,
-      'Invalid values for props %s on <%s> tag. Either remove them from the element, ' +
-        'or pass a string or number value to keep them in the DOM. ' +
-        'For details, see https://fb.me/react-attribute-behavior%s',
-      unknownPropString,
-      type,
-      getStackAddendum(),
-    );
+    const unknownPropString = unknownProps
+      .map(prop => '`' + prop + '`')
+      .join(', ');
+    if (unknownProps.length === 1) {
+      console.error(
+        'Invalid value for prop %s on <%s> tag. Either remove it from the element, ' +
+          'or pass a string or number value to keep it in the DOM. ' +
+          'For details, see https://fb.me/react-attribute-behavior',
+        unknownPropString,
+        type,
+      );
+    } else if (unknownProps.length > 1) {
+      console.error(
+        'Invalid values for props %s on <%s> tag. Either remove them from the element, ' +
+          'or pass a string or number value to keep them in the DOM. ' +
+          'For details, see https://fb.me/react-attribute-behavior',
+        unknownPropString,
+        type,
+      );
+    }
   }
 };
 

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -12,12 +12,17 @@
 let React;
 let ReactDOM;
 let ReactTestUtils;
+let act;
+let Scheduler;
 
 describe('ReactUpdates', () => {
   beforeEach(() => {
+    jest.resetModules();
     React = require('react');
     ReactDOM = require('react-dom');
     ReactTestUtils = require('react-dom/test-utils');
+    act = ReactTestUtils.act;
+    Scheduler = require('scheduler');
   });
 
   it('should batch state when updating state twice', () => {
@@ -399,7 +404,7 @@ describe('ReactUpdates', () => {
     let didUpdates = [];
 
     const UpdateLoggingMixin = {
-      componentWillUpdate: function() {
+      UNSAFE_componentWillUpdate: function() {
         willUpdates.push(this.constructor.displayName);
       },
       componentDidUpdate: function() {
@@ -521,7 +526,6 @@ describe('ReactUpdates', () => {
 
     const bContainer = document.createElement('div');
 
-    let a;
     let b;
 
     let aUpdated = false;
@@ -555,7 +559,7 @@ describe('ReactUpdates', () => {
       }
     }
 
-    a = ReactTestUtils.renderIntoDocument(<A />);
+    const a = ReactTestUtils.renderIntoDocument(<A />);
     ReactDOM.unstable_batchedUpdates(function() {
       a.setState({x: 1});
       b.setState({x: 1});
@@ -723,16 +727,13 @@ describe('ReactUpdates', () => {
         return <div />;
       }
 
-      componentWillUpdate() {
+      UNSAFE_componentWillUpdate() {
         x.go();
       }
     }
 
-    let x;
-    let y;
-
-    x = ReactTestUtils.renderIntoDocument(<X />);
-    y = ReactTestUtils.renderIntoDocument(<Y />);
+    const x = ReactTestUtils.renderIntoDocument(<X />);
+    const y = ReactTestUtils.renderIntoDocument(<Y />);
     expect(ReactDOM.findDOMNode(x).textContent).toBe('0');
 
     y.forceUpdate();
@@ -746,7 +747,7 @@ describe('ReactUpdates', () => {
     class A extends React.Component {
       state = {x: 0};
 
-      componentWillMount() {
+      UNSAFE_componentWillMount() {
         a = this;
       }
 
@@ -756,7 +757,7 @@ describe('ReactUpdates', () => {
     }
 
     class B extends React.Component {
-      componentWillMount() {
+      UNSAFE_componentWillMount() {
         a.setState({x: 1});
       }
 
@@ -784,7 +785,7 @@ describe('ReactUpdates', () => {
     class A extends React.Component {
       state = {x: this.props.x};
 
-      componentWillReceiveProps(nextProps) {
+      UNSAFE_componentWillReceiveProps(nextProps) {
         const newX = nextProps.x;
         this.setState({x: newX}, function() {
           // State should have updated by the time this callback gets called
@@ -858,7 +859,7 @@ describe('ReactUpdates', () => {
     let component = ReactTestUtils.renderIntoDocument(<A />);
 
     expect(() => {
-      expect(() => component.setState({}, 'no')).toWarnDev(
+      expect(() => component.setState({}, 'no')).toErrorDev(
         'setState(...): Expected the last optional `callback` argument to be ' +
           'a function. Instead received: no.',
       );
@@ -868,7 +869,7 @@ describe('ReactUpdates', () => {
     );
     component = ReactTestUtils.renderIntoDocument(<A />);
     expect(() => {
-      expect(() => component.setState({}, {foo: 'bar'})).toWarnDev(
+      expect(() => component.setState({}, {foo: 'bar'})).toErrorDev(
         'setState(...): Expected the last optional `callback` argument to be ' +
           'a function. Instead received: [object Object].',
       );
@@ -901,7 +902,7 @@ describe('ReactUpdates', () => {
     let component = ReactTestUtils.renderIntoDocument(<A />);
 
     expect(() => {
-      expect(() => component.forceUpdate('no')).toWarnDev(
+      expect(() => component.forceUpdate('no')).toErrorDev(
         'forceUpdate(...): Expected the last optional `callback` argument to be ' +
           'a function. Instead received: no.',
       );
@@ -911,7 +912,7 @@ describe('ReactUpdates', () => {
     );
     component = ReactTestUtils.renderIntoDocument(<A />);
     expect(() => {
-      expect(() => component.forceUpdate({foo: 'bar'})).toWarnDev(
+      expect(() => component.forceUpdate({foo: 'bar'})).toErrorDev(
         'forceUpdate(...): Expected the last optional `callback` argument to be ' +
           'a function. Instead received: [object Object].',
       );
@@ -945,7 +946,7 @@ describe('ReactUpdates', () => {
     class Child extends React.Component {
       state = {updated: false};
 
-      componentWillUpdate() {
+      UNSAFE_componentWillUpdate() {
         if (!once) {
           once = true;
           this.setState({updated: true});
@@ -1094,13 +1095,13 @@ describe('ReactUpdates', () => {
   });
 
   it(
-    'in sync mode, updates in componentWillUpdate and componentDidUpdate ' +
+    'in legacy mode, updates in componentWillUpdate and componentDidUpdate ' +
       'should both flush in the immediately subsequent commit',
     () => {
-      let ops = [];
+      const ops = [];
       class Foo extends React.Component {
         state = {a: false, b: false};
-        componentWillUpdate(_, nextState) {
+        UNSAFE_componentWillUpdate(_, nextState) {
           if (!nextState.a) {
             this.setState({a: true});
           }
@@ -1137,13 +1138,13 @@ describe('ReactUpdates', () => {
   );
 
   it(
-    'in sync mode, updates in componentWillUpdate and componentDidUpdate ' +
+    'in legacy mode, updates in componentWillUpdate and componentDidUpdate ' +
       '(on a sibling) should both flush in the immediately subsequent commit',
     () => {
-      let ops = [];
+      const ops = [];
       class Foo extends React.Component {
         state = {a: false};
-        componentWillUpdate(_, nextState) {
+        UNSAFE_componentWillUpdate(_, nextState) {
           if (!nextState.a) {
             this.setState({a: true});
           }
@@ -1208,7 +1209,7 @@ describe('ReactUpdates', () => {
   );
 
   it('uses correct base state for setState inside render phase', () => {
-    let ops = [];
+    const ops = [];
 
     class Foo extends React.Component {
       state = {step: 0};
@@ -1224,14 +1225,14 @@ describe('ReactUpdates', () => {
     }
 
     const container = document.createElement('div');
-    expect(() => ReactDOM.render(<Foo />, container)).toWarnDev(
+    expect(() => ReactDOM.render(<Foo />, container)).toErrorDev(
       'Cannot update during an existing state transition',
     );
     expect(ops).toEqual(['base: 0, memoized: 0', 'base: 1, memoized: 1']);
   });
 
   it('does not re-render if state update is null', () => {
-    let container = document.createElement('div');
+    const container = document.createElement('div');
 
     let instance;
     let ops = [];
@@ -1286,6 +1287,65 @@ describe('ReactUpdates', () => {
     expect(ops).toEqual(['Foo', 'Bar', 'Baz']);
   });
 
+  it.experimental(
+    'delays sync updates inside hidden subtrees in Concurrent Mode',
+    () => {
+      const container = document.createElement('div');
+
+      function Baz() {
+        Scheduler.unstable_yieldValue('Baz');
+        return <p>baz</p>;
+      }
+
+      let setCounter;
+      function Bar() {
+        const [counter, _setCounter] = React.useState(0);
+        setCounter = _setCounter;
+        Scheduler.unstable_yieldValue('Bar');
+        return <p>bar {counter}</p>;
+      }
+
+      function Foo() {
+        Scheduler.unstable_yieldValue('Foo');
+        React.useEffect(() => {
+          Scheduler.unstable_yieldValue('Foo#effect');
+        });
+        return (
+          <div>
+            <div hidden={true}>
+              <Bar />
+            </div>
+            <Baz />
+          </div>
+        );
+      }
+
+      const root = ReactDOM.createRoot(container);
+      let hiddenDiv;
+      act(() => {
+        root.render(<Foo />);
+        expect(Scheduler).toFlushAndYieldThrough(['Foo', 'Baz', 'Foo#effect']);
+        hiddenDiv = container.firstChild.firstChild;
+        expect(hiddenDiv.hidden).toBe(true);
+        expect(hiddenDiv.innerHTML).toBe('');
+        // Run offscreen update
+        expect(Scheduler).toFlushAndYield(['Bar']);
+        expect(hiddenDiv.hidden).toBe(true);
+        expect(hiddenDiv.innerHTML).toBe('<p>bar 0</p>');
+      });
+
+      ReactDOM.flushSync(() => {
+        setCounter(1);
+      });
+      // Should not flush yet
+      expect(hiddenDiv.innerHTML).toBe('<p>bar 0</p>');
+
+      // Run offscreen update
+      expect(Scheduler).toFlushAndYield(['Bar']);
+      expect(hiddenDiv.innerHTML).toBe('<p>bar 1</p>');
+    },
+  );
+
   it('can render ridiculously large number of roots without triggering infinite update loop error', () => {
     class Foo extends React.Component {
       componentDidMount() {
@@ -1310,13 +1370,53 @@ describe('ReactUpdates', () => {
     ReactDOM.render(<Foo />, container);
   });
 
+  it('resets the update counter for unrelated updates', () => {
+    const container = document.createElement('div');
+    const ref = React.createRef();
+
+    class EventuallyTerminating extends React.Component {
+      state = {step: 0};
+      componentDidMount() {
+        this.setState({step: 1});
+      }
+      componentDidUpdate() {
+        if (this.state.step < limit) {
+          this.setState({step: this.state.step + 1});
+        }
+      }
+      render() {
+        return this.state.step;
+      }
+    }
+
+    let limit = 55;
+    expect(() => {
+      ReactDOM.render(<EventuallyTerminating ref={ref} />, container);
+    }).toThrow('Maximum');
+
+    // Verify that we don't go over the limit if these updates are unrelated.
+    limit -= 10;
+    ReactDOM.render(<EventuallyTerminating ref={ref} />, container);
+    expect(container.textContent).toBe(limit.toString());
+    ref.current.setState({step: 0});
+    expect(container.textContent).toBe(limit.toString());
+    ref.current.setState({step: 0});
+    expect(container.textContent).toBe(limit.toString());
+
+    limit += 10;
+    expect(() => {
+      ref.current.setState({step: 0});
+    }).toThrow('Maximum');
+    expect(ref.current).toBe(null);
+  });
+
   it('does not fall into an infinite update loop', () => {
     class NonTerminating extends React.Component {
       state = {step: 0};
       componentDidMount() {
         this.setState({step: 1});
       }
-      componentWillUpdate() {
+      UNSAFE_componentWillUpdate() {
         this.setState({step: 2});
       }
       render() {
@@ -1335,6 +1435,88 @@ describe('ReactUpdates', () => {
     }).toThrow('Maximum');
   });
 
+  it('does not fall into an infinite update loop with useLayoutEffect', () => {
+    function NonTerminating() {
+      const [step, setStep] = React.useState(0);
+      React.useLayoutEffect(() => {
+        setStep(x => x + 1);
+      });
+      return step;
+    }
+
+    const container = document.createElement('div');
+    expect(() => {
+      ReactDOM.render(<NonTerminating />, container);
+    }).toThrow('Maximum');
+  });
+
+  it('can recover after falling into an infinite update loop', () => {
+    class NonTerminating extends React.Component {
+      state = {step: 0};
+      componentDidMount() {
+        this.setState({step: 1});
+      }
+      componentDidUpdate() {
+        this.setState({step: 2});
+      }
+      render() {
+        return this.state.step;
+      }
+    }
+
+    class Terminating extends React.Component {
+      state = {step: 0};
+      componentDidMount() {
+        this.setState({step: 1});
+      }
+      render() {
+        return this.state.step;
+      }
+    }
+
+    const container = document.createElement('div');
+    expect(() => {
+      ReactDOM.render(<NonTerminating />, container);
+    }).toThrow('Maximum');
+
+    ReactDOM.render(<Terminating />, container);
+    expect(container.textContent).toBe('1');
+
+    expect(() => {
+      ReactDOM.render(<NonTerminating />, container);
+    }).toThrow('Maximum');
+
+    ReactDOM.render(<Terminating />, container);
+    expect(container.textContent).toBe('1');
+  });
+
+  it('does not fall into mutually recursive infinite update loop with same container', () => {
+    // Note: this test would fail if there were two or more different roots.
+
+    class A extends React.Component {
+      componentDidMount() {
+        ReactDOM.render(<B />, container);
+      }
+      render() {
+        return null;
+      }
+    }
+
+    class B extends React.Component {
+      componentDidMount() {
+        ReactDOM.render(<A />, container);
+      }
+      render() {
+        return null;
+      }
+    }
+
+    const container = document.createElement('div');
+    expect(() => {
+      ReactDOM.render(<A />, container);
+    }).toThrow('Maximum');
+  });
+
   it('does not fall into an infinite error loop', () => {
     function BadRender() {
       throw new Error('error');
@@ -1342,6 +1524,9 @@ describe('ReactUpdates', () => {
 
     class ErrorBoundary extends React.Component {
       componentDidCatch() {
+        // Schedule a no-op state update to avoid triggering a DEV warning in the test.
+        this.setState({});
+
         this.props.parent.remount();
       }
       render() {
@@ -1364,4 +1549,208 @@ describe('ReactUpdates', () => {
       ReactDOM.render(<NonTerminating />, container);
     }).toThrow('Maximum');
   });
+
+  it('can schedule ridiculously many updates within the same batch without triggering a maximum update error', () => {
+    const subscribers = [];
+
+    class Child extends React.Component {
+      state = {value: 'initial'};
+      componentDidMount() {
+        subscribers.push(this);
+      }
+      render() {
+        return null;
+      }
+    }
+
+    class App extends React.Component {
+      render() {
+        const children = [];
+        for (let i = 0; i < 1200; i++) {
+          children.push(<Child key={i} />);
+        }
+        return children;
+      }
+    }
+
+    const container = document.createElement('div');
+    ReactDOM.render(<App />, container);
+
+    ReactDOM.unstable_batchedUpdates(() => {
+      subscribers.forEach(s => {
+        s.setState({value: 'update'});
+      });
+    });
+  });
+
+  if (__DEV__) {
+    it('warns about a deferred infinite update loop with useEffect', () => {
+      function NonTerminating() {
+        const [step, setStep] = React.useState(0);
+        React.useEffect(() => {
+          setStep(x => x + 1);
+          Scheduler.unstable_yieldValue(step);
+        });
+        return step;
+      }
+
+      function App() {
+        return <NonTerminating />;
+      }
+
+      let error = null;
+      let stack = null;
+      const originalConsoleError = console.error;
+      console.error = (e, s) => {
+        error = e;
+        stack = s;
+      };
+      try {
+        const container = document.createElement('div');
+        expect(() => {
+          act(() => {
+            ReactDOM.render(<App />, container);
+            while (error === null) {
+              Scheduler.unstable_flushNumberOfYields(1);
+              Scheduler.unstable_clearYields();
+            }
+            expect(error).toContain('Warning: Maximum update depth exceeded.');
+            expect(stack).toContain(' NonTerminating');
+            // rethrow error to prevent going into an infinite loop when act() exits
+            throw error;
+          });
+        }).toThrow('Maximum update depth exceeded.');
+      } finally {
+        console.error = originalConsoleError;
+      }
+    });
+
+    it('can have nested updates if they do not cross the limit', () => {
+      let _setStep;
+      const LIMIT = 50;
+
+      function Terminating() {
+        const [step, setStep] = React.useState(0);
+        _setStep = setStep;
+        React.useEffect(() => {
+          if (step < LIMIT) {
+            setStep(x => x + 1);
+          }
+        });
+        Scheduler.unstable_yieldValue(step);
+        return step;
+      }
+
+      const container = document.createElement('div');
+      act(() => {
+        ReactDOM.render(<Terminating />, container);
+      });
+      expect(container.textContent).toBe('50');
+      act(() => {
+        _setStep(0);
+      });
+      expect(container.textContent).toBe('50');
+    });
+
+    it('can have many updates inside useEffect without triggering a warning', () => {
+      function Terminating() {
+        const [step, setStep] = React.useState(0);
+        React.useEffect(() => {
+          for (let i = 0; i < 1000; i++) {
+            setStep(x => x + 1);
+          }
+          Scheduler.unstable_yieldValue('Done');
+        }, []);
+        return step;
+      }
+
+      const container = document.createElement('div');
+      act(() => {
+        ReactDOM.render(<Terminating />, container);
+      });
+
+      expect(Scheduler).toHaveYielded(['Done']);
+      expect(container.textContent).toBe('1000');
+    });
+  }
+
+  if (__DEV__) {
+    it('should properly trace interactions within batched udpates', () => {
+      const SchedulerTracing = require('scheduler/tracing');
+
+      let expectedInteraction;
+
+      const container = document.createElement('div');
+
+      const Component = jest.fn(() => {
+        expect(expectedInteraction).toBeDefined();
+
+        const interactions = SchedulerTracing.unstable_getCurrent();
+        expect(interactions.size).toBe(1);
+        expect(interactions).toContain(expectedInteraction);
+
+        return null;
+      });
+
+      ReactDOM.unstable_batchedUpdates(() => {
+        SchedulerTracing.unstable_trace(
+          'mount traced inside a batched update',
+          1,
+          () => {
+            const interactions = SchedulerTracing.unstable_getCurrent();
+            expect(interactions.size).toBe(1);
+            expectedInteraction = Array.from(interactions)[0];
+
+            ReactDOM.render(<Component />, container);
+          },
+        );
+      });
+
+      ReactDOM.unstable_batchedUpdates(() => {
+        SchedulerTracing.unstable_trace(
+          'update traced inside a batched update',
+          2,
+          () => {
+            const interactions = SchedulerTracing.unstable_getCurrent();
+            expect(interactions.size).toBe(1);
+            expectedInteraction = Array.from(interactions)[0];
+
+            ReactDOM.render(<Component />, container);
+          },
+        );
+      });
+
+      const secondContainer = document.createElement('div');
+
+      SchedulerTracing.unstable_trace(
+        'mount traced outside a batched update',
+        3,
+        () => {
+          ReactDOM.unstable_batchedUpdates(() => {
+            const interactions = SchedulerTracing.unstable_getCurrent();
+            expect(interactions.size).toBe(1);
+            expectedInteraction = Array.from(interactions)[0];
+
+            ReactDOM.render(<Component />, secondContainer);
+          });
+        },
+      );
+
+      SchedulerTracing.unstable_trace(
+        'update traced outside a batched update',
+        4,
+        () => {
+          ReactDOM.unstable_batchedUpdates(() => {
+            const interactions = SchedulerTracing.unstable_getCurrent();
+            expect(interactions.size).toBe(1);
+            expectedInteraction = Array.from(interactions)[0];
+
+            ReactDOM.render(<Component />, container);
+          });
+        },
+      );
+
+      expect(Component).toHaveBeenCalledTimes(4);
+    });
+  }
 });

@@ -5,30 +5,52 @@ const filesize = require('filesize');
 const chalk = require('chalk');
 const join = require('path').join;
 const fs = require('fs');
-const prevBuildResults = require('./results.json');
+const mkdirp = require('mkdirp');
+
+const BUNDLE_SIZES_FILE_NAME = join(__dirname, '../../build/bundle-sizes.json');
+const prevBuildResults = fs.existsSync(BUNDLE_SIZES_FILE_NAME)
+  ? require(BUNDLE_SIZES_FILE_NAME)
+  : {bundleSizes: []};
 
 const currentBuildResults = {
   // Mutated inside build.js during a build run.
-  // We make a copy so that partial rebuilds don't erase other stats.
-  bundleSizes: [...prevBuildResults.bundleSizes],
+  bundleSizes: [],
 };
 
 function saveResults() {
-  fs.writeFileSync(
-    join('scripts', 'rollup', 'results.json'),
-    JSON.stringify(currentBuildResults, null, 2)
-  );
+  if (process.env.CIRCLE_NODE_TOTAL) {
+    // In CI, write the bundle sizes to a subdirectory and append the node index
+    // to the filename. A downstream job will consolidate these into a
+    // single file.
+    const nodeIndex = process.env.CIRCLE_NODE_INDEX;
+    mkdirp.sync('build/sizes');
+    fs.writeFileSync(
+      join('build', 'sizes', `bundle-sizes-${nodeIndex}.json`),
+      JSON.stringify(currentBuildResults, null, 2)
+    );
+  } else {
+    // Write all the bundle sizes to a single JSON file.
+    fs.writeFileSync(
+      BUNDLE_SIZES_FILE_NAME,
+      JSON.stringify(currentBuildResults, null, 2)
+    );
+  }
 }
 
-function percentChange(prev, current) {
-  return Math.floor((current - prev) / prev * 100);
+function fractionalChange(prev, current) {
+  return (current - prev) / prev;
 }
 
 function percentChangeString(change) {
-  if (change > 0) {
-    return chalk.red.bold(`+${change} %`);
-  } else if (change <= 0) {
-    return chalk.green.bold(change + ' %');
+  if (!isFinite(change)) {
+    // When a new package is created
+    return 'n/a';
+  }
+  const formatted = (change * 100).toFixed(1);
+  if (/^-|^0(?:\.0+)$/.test(formatted)) {
+    return `${formatted}%`;
+  } else {
+    return `+${formatted}%`;
   }
 }
 
@@ -66,10 +88,12 @@ function generateResultsArray(current, prevResults) {
         packageName: result.packageName,
         prevSize: filesize(prevSize),
         prevFileSize: filesize(size),
-        prevFileSizeChange: percentChange(prevSize, size),
+        prevFileSizeChange: fractionalChange(prevSize, size),
+        prevFileSizeAbsoluteChange: size - prevSize,
         prevGzip: filesize(prevGzip),
         prevGzipSize: filesize(gzip),
-        prevGzipSizeChange: percentChange(prevGzip, gzip),
+        prevGzipSizeChange: fractionalChange(prevGzip, gzip),
+        prevGzipSizeAbsoluteChange: gzip - prevGzip,
       };
       // Strip any nulls
     })
@@ -78,7 +102,7 @@ function generateResultsArray(current, prevResults) {
 
 function printResults() {
   const table = new Table({
-    head: resultsHeaders.map(chalk.gray.yellow),
+    head: resultsHeaders.map(label => chalk.gray.yellow(label)),
   });
 
   const results = generateResultsArray(currentBuildResults, prevBuildResults);

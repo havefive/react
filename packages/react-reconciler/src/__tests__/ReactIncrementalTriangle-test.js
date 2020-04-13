@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -12,16 +12,19 @@
 
 let React;
 let ReactNoop;
+let Scheduler;
 
 describe('ReactIncrementalTriangle', () => {
   beforeEach(() => {
     jest.resetModules();
+
     React = require('react');
     ReactNoop = require('react-noop-renderer');
+    Scheduler = require('scheduler');
   });
 
   function span(prop) {
-    return {type: 'span', children: [], prop};
+    return {type: 'span', children: [], prop, hidden: false};
   }
 
   const FLUSH = 'FLUSH';
@@ -29,6 +32,13 @@ describe('ReactIncrementalTriangle', () => {
     return {
       type: FLUSH,
       unitsOfWork,
+    };
+  }
+
+  const FLUSH_ALL = 'FLUSH_ALL';
+  function flushAll() {
+    return {
+      type: FLUSH_ALL,
     };
   }
 
@@ -75,6 +85,8 @@ describe('ReactIncrementalTriangle', () => {
     switch (action.type) {
       case FLUSH:
         return `flush(${action.unitsOfWork})`;
+      case FLUSH_ALL:
+        return 'flushAll()';
       case STEP:
         return `step(${action.counter})`;
       case INTERRUPT:
@@ -109,16 +121,43 @@ describe('ReactIncrementalTriangle', () => {
   }
 
   function randomAction() {
-    switch (randomInteger(0, 5)) {
-      case 0:
+    const weights = [
+      [FLUSH, 1],
+      [FLUSH_ALL, 1],
+      [STEP, 1],
+      [INTERRUPT, 1],
+      [TOGGLE, 1],
+      [EXPIRE, 1],
+    ];
+    let totalWeight = 0;
+    for (let i = 0; i < weights.length; i++) {
+      totalWeight += weights[i][1];
+    }
+
+    const randomNumber = Math.random() * totalWeight;
+    let actionType;
+    let remainingWeight = randomNumber;
+    for (let i = 0; i < weights.length; i++) {
+      const [option, weight] = weights[i];
+      remainingWeight -= weight;
+      if (remainingWeight <= 0) {
+        actionType = option;
+        break;
+      }
+    }
+
+    switch (actionType) {
+      case FLUSH:
         return flush(randomInteger(0, TOTAL_TRIANGLES * 1.5));
-      case 1:
+      case FLUSH_ALL:
+        return flushAll();
+      case STEP:
         return step(randomInteger(0, 10));
-      case 2:
+      case INTERRUPT:
         return interrupt();
-      case 3:
-        return toggle(randomInteger(0, TOTAL_CHILDREN));
-      case 4:
+      case TOGGLE:
+        return toggle(randomInteger(0, TOTAL_TRIANGLES));
+      case EXPIRE:
         return expire(randomInteger(0, 1500));
       default:
         throw new Error('Switch statement should be exhaustive');
@@ -126,7 +165,7 @@ describe('ReactIncrementalTriangle', () => {
   }
 
   function randomActions(n) {
-    let actions = [];
+    const actions = [];
     for (let i = 0; i < n; i++) {
       actions.push(randomAction());
     }
@@ -134,54 +173,101 @@ describe('ReactIncrementalTriangle', () => {
   }
 
   function TriangleSimulator(rootID) {
+    const CounterContext = React.createContext([]);
+    const ActiveContext = React.createContext(0);
+
     let triangles = [];
     let leafTriangles = [];
-    let yieldAfterEachRender = false;
+    const yieldAfterEachRender = false;
     class Triangle extends React.Component {
       constructor(props) {
         super();
-        this.index = triangles.length;
-        triangles.push(this);
-        if (props.depth === 0) {
-          this.leafIndex = leafTriangles.length;
-          leafTriangles.push(this);
-        }
         this.state = {isActive: false};
+        this.child = React.createRef(null);
       }
       activate() {
-        if (this.props.depth !== 0) {
-          throw new Error('Cannot activate non-leaf component');
-        }
         this.setState({isActive: true});
       }
       deactivate() {
-        if (this.props.depth !== 0) {
-          throw new Error('Cannot deactivate non-leaf component');
-        }
         this.setState({isActive: false});
       }
       shouldComponentUpdate(nextProps, nextState) {
         return (
           this.props.counter !== nextProps.counter ||
+          this.props.activeDepth !== nextProps.activeDepth ||
           this.state.isActive !== nextState.isActive
         );
       }
+      componentDidMount() {
+        this.index = triangles.length;
+        triangles.push(this);
+        if (this.props.remainingDepth === 0) {
+          this.leafIndex = leafTriangles.length;
+          leafTriangles.push(this);
+        }
+      }
+      componentDidUpdate() {
+        if (this.child.current !== null) {
+          const {prop: currentCounter} = JSON.parse(this.child.current.prop);
+          if (this.props.counter !== currentCounter) {
+            throw new Error('Incorrect props in lifecycle');
+          }
+        }
+      }
       render() {
         if (yieldAfterEachRender) {
-          ReactNoop.yield(this);
+          Scheduler.unstable_yieldValue(this);
         }
-        const {counter, depth} = this.props;
-        if (depth === 0) {
-          if (this.state.isActive) {
-            return <span prop={'*' + counter + '*'} />;
-          }
-          return <span prop={counter} />;
-        }
-        return [
-          <Triangle key={1} counter={counter} depth={depth - 1} />,
-          <Triangle key={2} counter={counter} depth={depth - 1} />,
-          <Triangle key={3} counter={counter} depth={depth - 1} />,
-        ];
+        const {counter, remainingDepth} = this.props;
+        return (
+          <ActiveContext.Consumer>
+            {activeContext => (
+              <CounterContext.Consumer>
+                {counterContext => {
+                  const activeDepthProp = this.state.isActive
+                    ? this.props.activeDepth + 1
+                    : this.props.activeDepth;
+                  const activeDepthContext = this.state.isActive
+                    ? activeContext + 1
+                    : activeContext;
+                  if (remainingDepth === 0) {
+                    // Leaf
+                    const output = JSON.stringify({
+                      prop: counter,
+                      isActive: this.state.isActive,
+                      counterContext: counterContext,
+                      activeDepthProp,
+                      activeDepthContext,
+                    });
+                    return <span ref={this.child} prop={output} />;
+                  }
+
+                  return (
+                    <ActiveContext.Provider value={activeDepthContext}>
+                      <CounterContext.Provider value={counter}>
+                        <Triangle
+                          counter={counter}
+                          activeDepth={activeDepthProp}
+                          remainingDepth={remainingDepth - 1}
+                        />
+                        <Triangle
+                          counter={counter}
+                          activeDepth={activeDepthProp}
+                          remainingDepth={remainingDepth - 1}
+                        />
+                        <Triangle
+                          counter={counter}
+                          activeDepth={activeDepthProp}
+                          remainingDepth={remainingDepth - 1}
+                        />
+                      </CounterContext.Provider>
+                    </ActiveContext.Provider>
+                  );
+                }}
+              </CounterContext.Consumer>
+            )}
+          </ActiveContext.Consumer>
+        );
       }
     }
 
@@ -199,7 +285,13 @@ describe('ReactIncrementalTriangle', () => {
       }
       render() {
         appInstance = this;
-        return <Triangle counter={this.state.counter} depth={3} />;
+        return (
+          <Triangle
+            counter={this.state.counter}
+            activeDepth={0}
+            remainingDepth={this.props.remainingDepth}
+          />
+        );
       }
     }
 
@@ -210,54 +302,72 @@ describe('ReactIncrementalTriangle', () => {
       // Remounts the whole tree by changing the key
       if (rootID) {
         ReactNoop.renderToRootWithID(
-          <App depth={MAX_DEPTH} key={keyCounter++} />,
+          <App remainingDepth={MAX_DEPTH} key={keyCounter++} />,
           rootID,
         );
       } else {
-        ReactNoop.render(<App depth={MAX_DEPTH} key={keyCounter++} />);
+        ReactNoop.render(<App remainingDepth={MAX_DEPTH} key={keyCounter++} />);
       }
-      ReactNoop.flush();
+      Scheduler.unstable_flushAllWithoutAsserting();
       assertConsistentTree();
       return appInstance;
     }
 
     reset();
 
-    function assertConsistentTree(activeTriangle, counter) {
-      const activeIndex = activeTriangle ? activeTriangle.leafIndex : -1;
-
+    function assertConsistentTree(activeTriangleIndices = new Set(), counter) {
       const children = ReactNoop.getChildren(rootID);
 
       if (children.length !== TOTAL_CHILDREN) {
         throw new Error('Wrong number of children.');
       }
 
+      let expectedCounter = counter;
+
       for (let i = 0; i < children.length; i++) {
-        let child = children[i];
-        let num = child.prop;
+        const child = children[i];
+
+        const output = JSON.parse(child.prop);
+        const prop = output.prop;
+        const isActive = output.isActive;
+        const counterContext = output.counterContext;
+        const activeDepthProp = output.activeDepthProp;
+        const activeDepthContext = output.activeDepthContext;
 
         // If an expected counter is not specified, use the value of the
         // first child.
-        if (counter === undefined) {
-          if (typeof num === 'string') {
-            counter = parseInt(num.substr(1, num.length - 2), 10);
-          } else {
-            counter = num;
-          }
+        if (expectedCounter === undefined) {
+          expectedCounter = prop;
+        }
+        const expectedIsActive = activeTriangleIndices.has(i);
+
+        if (prop !== expectedCounter) {
+          throw new Error(
+            `Triangle ${i} is inconsistent: prop ${prop} instead of ` +
+              expectedCounter,
+          );
         }
 
-        if (i === activeIndex) {
-          if (num !== `*${counter}*`) {
-            throw new Error(
-              `Triangle ${i} is inconsistent: ${num} instead of *${counter}*.`,
-            );
-          }
-        } else {
-          if (num !== counter) {
-            throw new Error(
-              `Triangle ${i} is inconsistent: ${num} instead of ${counter}.`,
-            );
-          }
+        if (isActive !== expectedIsActive) {
+          throw new Error(
+            `Triangle ${i} is inconsistent: isActive ${isActive} instead of ` +
+              expectedIsActive,
+          );
+        }
+
+        if (counterContext !== prop) {
+          throw new Error(
+            `Triangle ${i} is inconsistent: prop ${prop} does not match ` +
+              `counterContext ${counterContext}`,
+          );
+        }
+
+        if (activeDepthContext !== activeDepthProp) {
+          throw new Error(
+            `Triangle ${i} is inconsistent: activeDepthProp ` +
+              `${activeDepthProp} does not match activeDepthContext ` +
+              activeDepthContext,
+          );
         }
       }
     }
@@ -266,7 +376,8 @@ describe('ReactIncrementalTriangle', () => {
       const app = reset();
       let expectedCounterAtEnd = app.state.counter;
 
-      let activeTriangle = null;
+      const activeIndices = new Set();
+      const activeLeafIndices = new Set();
       let action;
       while (true) {
         action = yield;
@@ -276,7 +387,10 @@ describe('ReactIncrementalTriangle', () => {
         ReactNoop.flushSync(() => {
           switch (action.type) {
             case FLUSH:
-              ReactNoop.flushUnitsOfWork(action.unitsOfWork);
+              Scheduler.unstable_flushNumberOfYields(action.unitsOfWork);
+              break;
+            case FLUSH_ALL:
+              Scheduler.unstable_flushAllWithoutAsserting();
               break;
             case STEP:
               ReactNoop.deferredUpdates(() => {
@@ -288,18 +402,23 @@ describe('ReactIncrementalTriangle', () => {
               app.interrupt();
               break;
             case TOGGLE:
-              const targetTriangle = leafTriangles[action.childIndex];
+              const targetTriangle = triangles[action.childIndex];
               if (targetTriangle === undefined) {
                 throw new Error('Target index is out of bounds');
               }
-              if (targetTriangle === activeTriangle) {
-                activeTriangle = null;
+              const index = targetTriangle.index;
+              const leafIndex = targetTriangle.leafIndex;
+              if (activeIndices.has(index)) {
+                activeIndices.delete(index);
+                if (leafIndex !== undefined) {
+                  activeLeafIndices.delete(leafIndex);
+                }
                 targetTriangle.deactivate();
               } else {
-                if (activeTriangle !== null) {
-                  activeTriangle.deactivate();
+                activeIndices.add(index);
+                if (leafIndex !== undefined) {
+                  activeLeafIndices.add(leafIndex);
                 }
-                activeTriangle = targetTriangle;
                 targetTriangle.activate();
               }
               break;
@@ -307,19 +426,22 @@ describe('ReactIncrementalTriangle', () => {
               ReactNoop.expire(action.ms);
               break;
             default:
-              break;
+              throw new Error('Switch statement should be exhaustive');
           }
         });
-        assertConsistentTree(activeTriangle);
+        assertConsistentTree(activeLeafIndices);
       }
       // Flush remaining work
-      ReactNoop.flush();
-      assertConsistentTree(activeTriangle, expectedCounterAtEnd);
+      Scheduler.unstable_flushAllWithoutAsserting();
+      assertConsistentTree(activeLeafIndices, expectedCounterAtEnd);
     }
 
     function simulate(...actions) {
       const gen = simulateAndYield();
-      for (let action of actions) {
+      // Call this once to prepare the generator
+      gen.next();
+      // eslint-disable-next-line no-for-of-loops/no-for-of-loops
+      for (const action of actions) {
         gen.next(action);
       }
       gen.next(STOP);
@@ -348,6 +470,7 @@ describe('ReactIncrementalTriangle', () => {
       simulate(step(4), flush(52), expire(1476), flush(17), step(0));
       simulate(interrupt(), toggle(10), step(2), expire(990), flush(46));
       simulate(interrupt(), step(6), step(7), toggle(6), interrupt());
+      simulate(interrupt(), toggle(31), toggle(31), toggle(13), step(1));
     });
 
     it('generative tests', () => {
@@ -404,7 +527,8 @@ ${formatActions(actions)}
 
     function simulateMultipleRoots(...actions) {
       const roots = new Map();
-      for (let rootID of rootIDs) {
+      // eslint-disable-next-line no-for-of-loops/no-for-of-loops
+      for (const rootID of rootIDs) {
         const simulator = TriangleSimulator(rootID);
         const generator = simulator.simulateAndYield();
         // Call this once to prepare the generator
@@ -430,6 +554,13 @@ ${formatActions(actions)}
         ['a', interrupt()],
         ['c', step(2)],
         ['b', interrupt()],
+      );
+
+      simulateMultipleRoots(
+        ['c', toggle(0)],
+        ['c', step(1)],
+        ['b', flush(7)],
+        ['c', toggle(0)],
       );
     });
 
